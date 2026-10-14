@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Themed-icon silhouette: ears, head and face cut-outs. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M38,34C30,33 24,40 24,50C24,60 27,68 32,70C36,71 38,66 39,60L42,40C42,36 41,34 38,34z M70,34C78,33 84,40 84,50C84,60 81,68 76,70C72,71 70,66 69,60L66,40C66,36 67,34 70,34z" />
+    <path android:fillColor="#FFFFFFFF" android:fillType="evenOdd"
+        android:pathData="M54,32C67,32 76,41 76,54C76,68 66,78 54,78C42,78 32,68 32,54C32,41 41,32 54,32z M42,52.5a3.6,3.9 0 1,0 7.2,0a3.6,3.9 0 1,0 -7.2,0z M58.8,52.5a3.6,3.9 0 1,0 7.2,0a3.6,3.9 0 1,0 -7.2,0z M50,61.2C50,59.8 51.5,59.3 54,59.3C56.5,59.3 58,59.8 58,61.2C58,63 55.8,64.6 54,64.6C52.2,64.6 50,63 50,61.2z" />
+</vector>

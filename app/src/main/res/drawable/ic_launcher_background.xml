@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:fillColor="#FFFFE7C2" android:pathData="M0,0h108v108h-108z" />
+    <!-- soft paw-print dots -->
+    <path android:fillColor="#33F2A65A" android:pathData="M18,84a5,5 0 1,0 10,0a5,5 0 1,0 -10,0z M13,77a2.2,2.2 0 1,0 4.4,0a2.2,2.2 0 1,0 -4.4,0z M18.5,73.5a2.2,2.2 0 1,0 4.4,0a2.2,2.2 0 1,0 -4.4,0z M25,74a2.2,2.2 0 1,0 4.4,0a2.2,2.2 0 1,0 -4.4,0z" />
+    <path android:fillColor="#33F2A65A" android:pathData="M82,26a5,5 0 1,0 10,0a5,5 0 1,0 -10,0z M77,19a2.2,2.2 0 1,0 4.4,0a2.2,2.2 0 1,0 -4.4,0z M82.5,15.5a2.2,2.2 0 1,0 4.4,0a2.2,2.2 0 1,0 -4.4,0z M89,16a2.2,2.2 0 1,0 4.4,0a2.2,2.2 0 1,0 -4.4,0z" />
+</vector>
