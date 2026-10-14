@@ -48,6 +48,8 @@ pub const Session = struct {
     cell_width: u32 = 1,
     cell_height: u32 = 1,
     held: bool = false,
+    /// False when the user's policy denies OSC 52 writes; programs are told so.
+    clipboard_write_allowed: bool = true,
     force_full: bool = true,
     last_mouse_cell: ?vt.Coordinate = null,
 
@@ -333,6 +335,10 @@ pub const Session = struct {
 
     fn clipboardWrite(handler: *Handler, write: vt.clipboard.Write) void {
         const self = fromHandler(handler);
+        if (!self.clipboard_write_allowed) {
+            write.reply(.denied);
+            return;
+        }
         for (write.contents) |content| {
             if (!vt.clipboard.isTextMime(content.mime)) continue;
             self.clipboard.clearRetainingCapacity();
@@ -341,7 +347,8 @@ pub const Session = struct {
                 return;
             };
             self.events |= Event.clipboard;
-            // The app asks the user before touching the system clipboard.
+            // With the "ask" policy the app still asks before touching the
+            // system clipboard; the reply can't wait for that answer.
             write.reply(.{ .success = .{} });
             return;
         }

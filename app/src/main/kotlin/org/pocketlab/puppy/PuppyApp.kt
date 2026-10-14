@@ -53,6 +53,11 @@ class PuppyApp : Application() {
             val initial = settings.settings.first()
             sessions.scrollbackLines = initial.scrollbackLines
             sessions.restore()
+            launch {
+                settings.settings.map { it.clipboardWrite }.distinctUntilChanged().collect {
+                    sessions.clipboardWritesAllowed = it != org.pocketlab.puppy.data.ClipboardPolicy.DENY
+                }
+            }
             settings.settings.map { it.scrollbackLines }.distinctUntilChanged().collect { sessions.scrollbackLines = it }
         }
         scope.launch {

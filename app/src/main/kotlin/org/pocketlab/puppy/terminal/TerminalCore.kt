@@ -173,6 +173,10 @@ class TerminalCore(
         requestFrame()
     }
 
+    fun setClipboardWriteAllowed(allowed: Boolean) = post {
+        NativeTerminal.setClipboardWriteAllowed(handle, allowed)
+    }
+
     fun scrollBy(lines: Int) = post {
         NativeTerminal.scroll(handle, NativeTerminal.SCROLL_DELTA, lines)
         requestFrame()

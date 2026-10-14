@@ -148,3 +148,15 @@ test "scrollback and viewport scrolling" {
     _ = try s.snapshot(&buf, false);
     try testing.expectEqual(@as(u32, '3'), cellWord(&buf, 4, 0, 0, 0));
 }
+
+test "denied clipboard writes are not collected" {
+    const s = try Session.create(testing.allocator, .{ .cols = 10, .rows = 2 });
+    defer s.destroy();
+    s.clipboard_write_allowed = false;
+    const ev = s.feed("\x1b]52;c;aGk=\x07");
+    try testing.expect(ev & term.Event.clipboard == 0);
+    s.clipboard_write_allowed = true;
+    const ev2 = s.feed("\x1b]52;c;aGk=\x07");
+    try testing.expect(ev2 & term.Event.clipboard != 0);
+    try testing.expectEqualStrings("hi", s.clipboard.items);
+}

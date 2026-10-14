@@ -215,6 +215,10 @@ export fn Java_org_pocketlab_puppy_terminal_NativeTerminal_snapshot(
     return @intCast(n);
 }
 
+export fn Java_org_pocketlab_puppy_terminal_NativeTerminal_setClipboardWriteAllowed(_: Env, _: c.jclass, h: c.jlong, allowed: c.jboolean) void {
+    if (session(h)) |s| s.clipboard_write_allowed = allowed != 0;
+}
+
 /// The terminal's current grid as (cols << 16) | rows. Programs can change it
 /// themselves (DECCOLM), so frame buffers are sized from this.
 export fn Java_org_pocketlab_puppy_terminal_NativeTerminal_gridSize(_: Env, _: c.jclass, h: c.jlong) c.jint {

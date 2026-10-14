@@ -131,7 +131,15 @@ class SessionManager(private val context: Context) {
 
     private fun applyColors(s: TerminalSession) {
         s.core.setColors(colors.background, colors.foreground, colors.cursor, colors.palette)
+        s.core.setClipboardWriteAllowed(clipboardWritesAllowed)
     }
+
+    /** False under the "deny" OSC 52 policy: programs are told the write was refused. */
+    var clipboardWritesAllowed = true
+        set(value) {
+            field = value
+            _sessions.value.forEach { it.core.setClipboardWriteAllowed(value) }
+        }
 
     private fun changed() {
         save()
