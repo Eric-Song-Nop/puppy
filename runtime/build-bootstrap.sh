@@ -35,11 +35,19 @@ for patch in "$ROOT"/runtime/patches/*.patch; do
 	[ -e "$patch" ] || continue
 	git -C "$WORK" apply "$patch"
 done
+# TERMUX_REPO_APP__PACKAGE_NAME stays com.termux on purpose: because it then
+# differs from our package name, build-package.sh refuses to download
+# dependencies from the official repo and compiles everything locally.
 sed -i.orig \
 	-e "s|^TERMUX_APP__PACKAGE_NAME=\"com.termux\"|TERMUX_APP__PACKAGE_NAME=\"$APP_ID\"|" \
-	-e "s|^TERMUX_REPO_APP__PACKAGE_NAME=\"com.termux\"|TERMUX_REPO_APP__PACKAGE_NAME=\"$APP_ID\"|" \
 	"$WORK/scripts/properties.sh"
 grep -q "TERMUX_APP__PACKAGE_NAME=\"$APP_ID\"" "$WORK/scripts/properties.sh"
+grep -q '^TERMUX_REPO_APP__PACKAGE_NAME="com.termux"' "$WORK/scripts/properties.sh"
+
+# The builder image is amd64-only; Docker Desktop emulates it on Apple Silicon.
+if [ "$(uname -m)" = arm64 ] || [ "$(uname -m)" = aarch64 ]; then
+	export TERMUX_DOCKER_RUN_EXTRA_ARGS="--platform linux/amd64 ${TERMUX_DOCKER_RUN_EXTRA_ARGS:-}"
+fi
 
 (cd "$WORK" && ./scripts/run-docker.sh ./scripts/build-bootstraps.sh --architectures "$ARCH")
 
