@@ -39,6 +39,8 @@ pub const Flag = struct {
     pub const cursor_keys: u32 = 1 << 4;
     pub const render_hold: u32 = 1 << 5;
     pub const scrolled_back: u32 = 1 << 6;
+    /// Kitty graphics placements exist; fetch them with kittyPlacements.
+    pub const images: u32 = 1 << 7;
 };
 
 /// Cell attribute bits (cell word 3).

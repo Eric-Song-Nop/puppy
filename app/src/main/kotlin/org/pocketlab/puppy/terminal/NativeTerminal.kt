@@ -55,6 +55,12 @@ internal object NativeTerminal {
         handle: Long, action: Int, button: Int, mods: Int, x: Float, y: Float, width: Int, height: Int, anyPressed: Boolean,
     ): ByteArray?
 
+    /** Visible Kitty graphics placements, [KittyPlacement.WORDS] ints each; returns the count. */
+    @JvmStatic external fun kittyPlacements(handle: Long, out: IntArray): Int
+
+    /** Premultiplied RGBA pixels of an image; width and height go to `sizeOut`. */
+    @JvmStatic external fun kittyImage(handle: Long, id: Int, sizeOut: IntArray): ByteArray?
+
     @JvmStatic external fun encodePaste(handle: Long, data: ByteArray): ByteArray?
     @JvmStatic external fun encodeFocus(handle: Long, gained: Boolean): ByteArray?
 }

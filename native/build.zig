@@ -13,7 +13,11 @@ pub fn build(b: *std.Build) !void {
         .strip = optimize != .Debug,
     });
     if (b.lazyDependency("ghostty", .{ .target = target, .optimize = optimize })) |dep| {
-        mod.addImport("ghostty-vt", dep.module("ghostty-vt"));
+        const vt = dep.module("ghostty-vt");
+        mod.addImport("ghostty-vt", vt);
+        // Reuse the module's own wuffs (PNG decoder for Kitty graphics, see
+        // graphics.zig) rather than a second copy of it.
+        mod.addImport("wuffs", vt.import_table.get("wuffs") orelse return error.GhosttyWithoutKittyGraphics);
     }
 
     if (target.result.abi.isAndroid()) {
@@ -50,7 +54,9 @@ pub fn build(b: *std.Build) !void {
         .link_libc = true,
     });
     if (b.lazyDependency("ghostty", .{ .target = b.graph.host })) |dep| {
-        test_mod.addImport("ghostty-vt", dep.module("ghostty-vt"));
+        const vt = dep.module("ghostty-vt");
+        test_mod.addImport("ghostty-vt", vt);
+        test_mod.addImport("wuffs", vt.import_table.get("wuffs") orelse return error.GhosttyWithoutKittyGraphics);
     }
     const tests = b.addTest(.{ .root_module = test_mod });
     b.step("test", "Run native unit tests").dependOn(&b.addRunArtifact(tests).step);

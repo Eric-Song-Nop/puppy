@@ -7,6 +7,7 @@ const c = @import("c");
 const term = @import("term.zig");
 const frame = @import("frame.zig");
 const pty = @import("pty.zig");
+const graphics = @import("graphics.zig");
 
 const alloc = std.heap.c_allocator;
 
@@ -322,6 +323,28 @@ export fn Java_org_pocketlab_puppy_terminal_NativeTerminal_encodeFocus(env: Env,
     defer aw.deinit();
     s.encodeFocus(&aw.writer, gained != 0) catch return null;
     return encoded(env, &aw);
+}
+
+/// Fills `out` with visible Kitty graphics placements (graphics.P layout).
+/// Returns the number written. Call on the core thread after a snapshot.
+export fn Java_org_pocketlab_puppy_terminal_NativeTerminal_kittyPlacements(env: Env, _: c.jclass, h: c.jlong, out: c.jintArray) c.jint {
+    const s = session(h) orelse return 0;
+    const cap: usize = @intCast(env.*.*.GetArrayLength.?(env, out));
+    var buf: [64 * graphics.placement_words]i32 = undefined;
+    const n = graphics.placements(s.terminal, buf[0..@min(cap, buf.len)]);
+    if (n > 0) env.*.*.SetIntArrayRegion.?(env, out, 0, @intCast(n * graphics.placement_words), @ptrCast(&buf));
+    return @intCast(n);
+}
+
+/// Returns an image's pixels as premultiplied RGBA and stores width/height
+/// in `size_out`, or null if the image is gone.
+export fn Java_org_pocketlab_puppy_terminal_NativeTerminal_kittyImage(env: Env, _: c.jclass, h: c.jlong, id: c.jint, size_out: c.jintArray) c.jbyteArray {
+    const s = session(h) orelse return null;
+    const px = (graphics.imagePixels(alloc, s.terminal, @bitCast(id)) catch return null) orelse return null;
+    defer alloc.free(px.data);
+    var size = [2]c.jint{ @intCast(px.width), @intCast(px.height) };
+    env.*.*.SetIntArrayRegion.?(env, size_out, 0, 2, &size);
+    return newBytes(env, px.data);
 }
 
 // -------------------------------------------------------------------- Pty

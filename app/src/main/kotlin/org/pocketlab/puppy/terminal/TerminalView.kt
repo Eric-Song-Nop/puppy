@@ -169,6 +169,8 @@ class TerminalView @JvmOverloads constructor(context: Context, attrs: AttributeS
         // The selection marks screen cells; once output scrolls them, it would
         // cover different text, so drop it.
         selection?.let { if (frame.scrollTotal != selectionScroll.first || frame.scrollOffset != selectionScroll.second) clearSelection() }
+        renderer.coreCellWidth = renderer.cellWidth.toInt().coerceAtLeast(1)
+        renderer.coreCellHeight = renderer.cellHeight.toInt().coerceAtLeast(1)
         renderer.selection = selection
         renderer.draw(canvas, frame, hasFocus(), cursorOn, preedit)
         selection?.let { drawHandles(canvas, it.normalized(), frame) }

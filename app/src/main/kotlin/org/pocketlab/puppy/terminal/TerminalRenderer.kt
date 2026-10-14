@@ -71,12 +71,36 @@ class TerminalRenderer(
     fun draw(canvas: Canvas, frame: TerminalFrame, focused: Boolean, cursorOn: Boolean, preedit: String?) {
         canvas.drawColor(frame.defaultBackground)
         for (y in 0 until frame.rows) drawBackgrounds(canvas, frame, y)
+        drawImages(canvas, frame, below = true)
         for (y in 0 until frame.rows) drawText(canvas, frame, y)
+        drawImages(canvas, frame, below = false)
         if (frame.cursorVisible && !frame.scrolledBack && preedit.isNullOrEmpty()) {
             drawCursor(canvas, frame, focused, cursorOn)
         }
         if (!preedit.isNullOrEmpty()) drawPreedit(canvas, frame, preedit)
         if (frame.scrolledBack) drawScrollbar(canvas, frame)
+    }
+
+    /** Pixel size of a terminal cell as the core knows it (integer), for image scaling. */
+    var coreCellWidth = 1
+    var coreCellHeight = 1
+    private val imageSrc = android.graphics.Rect()
+    private val imageDst = android.graphics.RectF()
+    private val imagePaint = Paint(Paint.FILTER_BITMAP_FLAG)
+
+    /** Kitty graphics: negative z under the text, the rest over it. */
+    private fun drawImages(canvas: Canvas, frame: TerminalFrame, below: Boolean) {
+        if (frame.images.isEmpty()) return
+        val sx = cellWidth / coreCellWidth.coerceAtLeast(1)
+        val sy = cellHeight / coreCellHeight.coerceAtLeast(1)
+        for (p in frame.images) {
+            if ((p.z < 0) != below) continue
+            imageSrc.set(p.sourceX, p.sourceY, p.sourceX + p.sourceWidth, p.sourceY + p.sourceHeight)
+            val left = p.col * cellWidth + p.xOffset * sx
+            val top = p.row * cellHeight + p.yOffset * sy
+            imageDst.set(left, top, left + p.width * sx, top + p.height * sy)
+            canvas.drawBitmap(p.bitmap, imageSrc, imageDst, imagePaint)
+        }
     }
 
     private fun cellColors(frame: TerminalFrame, i: Int): Long {

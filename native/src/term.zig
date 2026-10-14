@@ -7,6 +7,7 @@
 const std = @import("std");
 const vt = @import("ghostty-vt");
 const frame = @import("frame.zig");
+const graphics = @import("graphics.zig");
 
 const Allocator = std.mem.Allocator;
 const Terminal = vt.Terminal;
@@ -30,6 +31,8 @@ pub const Options = struct {
     scrollback_lines: usize = 10_000,
     /// Native memory budget for scrollback; lines alone do not bound memory.
     scrollback_bytes: usize = 64 * 1024 * 1024,
+    /// Native memory budget for Kitty graphics images.
+    image_bytes: usize = 64 * 1000 * 1000,
 };
 
 pub const Session = struct {
@@ -55,6 +58,7 @@ pub const Session = struct {
 
     pub fn create(alloc: Allocator, opts: Options) !*Session {
         if (opts.cols == 0 or opts.rows == 0) return error.InvalidSize;
+        graphics.installDecoder();
 
         const self = try alloc.create(Session);
         errdefer alloc.destroy(self);
@@ -74,6 +78,8 @@ pub const Session = struct {
             .rows = opts.rows,
             .max_scrollback_bytes = opts.scrollback_bytes,
             .max_scrollback_lines = opts.scrollback_lines,
+            // Kitty graphics (image previews in yazi, ranger, etc.).
+            .kitty_image_storage_limit = opts.image_bytes,
         });
         errdefer t.deinit(alloc);
         // We don't install Ghostty's shell integration.
@@ -197,6 +203,7 @@ pub const Session = struct {
         if (t.modes.get(.cursor_keys)) flags |= frame.Flag.cursor_keys;
         if (self.held) flags |= frame.Flag.render_hold;
         if (self.terminal.screens.active.pages.viewport != .active) flags |= frame.Flag.scrolled_back;
+        if (self.terminal.screens.active.kitty_images.placements.count() > 0) flags |= frame.Flag.images;
         return flags;
     }
 
@@ -206,7 +213,8 @@ pub const Session = struct {
     pub fn snapshot(self: *Session, out: []u8, force: bool) !usize {
         if (self.held and !force) return 0;
         try self.render.update(self.alloc, self.terminal);
-        if (!force and !self.force_full and self.render.dirty == .false) return 0;
+        const images_changed = graphics.takeDirty(self.terminal);
+        if (!force and !self.force_full and self.render.dirty == .false and !images_changed) return 0;
         const n = try frame.write(out, &self.render, self.terminal, self.modeFlags());
         self.render.dirty = .false;
         self.force_full = false;

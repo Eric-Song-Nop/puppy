@@ -1,5 +1,6 @@
 package org.pocketlab.puppy.terminal
 
+import android.graphics.Bitmap
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.concurrent.Executors
@@ -152,8 +153,51 @@ class TerminalCore(
         forceNext = false
         lastSnapshotNanos = System.nanoTime()
         if (n > 0) {
-            frame = TerminalFrame.decode(buffer, n)
+            val f = TerminalFrame.decode(buffer, n)
+            f.images = if (f.flags and TerminalFrame.FLAG_IMAGES != 0) placements() else emptyList()
+            if (f.images.isEmpty() && bitmaps.isNotEmpty()) bitmaps.clear()
+            frame = f
             callbacks.onFrame()
+        }
+    }
+
+    private val placementWords = IntArray(KittyPlacement.MAX * KittyPlacement.WORDS)
+    private val imageSize = IntArray(2)
+
+    /** Image id -> (generation, bitmap). Only touched on the core thread. */
+    private val bitmaps = HashMap<Int, Pair<Long, Bitmap>>()
+
+    private fun placements(): List<KittyPlacement> {
+        val n = NativeTerminal.kittyPlacements(handle, placementWords)
+        if (n <= 0) return emptyList()
+        val out = ArrayList<KittyPlacement>(n)
+        val live = HashSet<Int>()
+        for (i in 0 until n) {
+            val o = i * KittyPlacement.WORDS
+            val w = placementWords
+            val id = w[o]
+            val generation = (w[o + 1].toLong() and 0xFFFFFFFFL) or (w[o + 2].toLong() shl 32)
+            live += id
+            val bitmap = bitmaps[id]?.takeIf { it.first == generation }?.second
+                ?: loadBitmap(id)?.also { bitmaps[id] = generation to it }
+                ?: continue
+            out += KittyPlacement(
+                bitmap, col = w[o + 3], row = w[o + 4], xOffset = w[o + 5], yOffset = w[o + 6],
+                width = w[o + 7], height = w[o + 8], sourceX = w[o + 9], sourceY = w[o + 10],
+                sourceWidth = w[o + 11], sourceHeight = w[o + 12], z = w[o + 13],
+            )
+        }
+        // Drop bitmaps of images no longer placed; native still owns the data.
+        bitmaps.keys.retainAll(live)
+        return out
+    }
+
+    private fun loadBitmap(id: Int): Bitmap? {
+        val rgba = NativeTerminal.kittyImage(handle, id, imageSize) ?: return null
+        val (w, h) = imageSize[0] to imageSize[1]
+        if (w <= 0 || h <= 0 || rgba.size < w * h * 4) return null
+        return Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888).apply {
+            copyPixelsFromBuffer(ByteBuffer.wrap(rgba))
         }
     }
 

@@ -160,3 +160,30 @@ test "denied clipboard writes are not collected" {
     try testing.expect(ev2 & term.Event.clipboard != 0);
     try testing.expectEqualStrings("hi", s.clipboard.items);
 }
+
+test "kitty graphics: PNG transmit and place produces a placement" {
+    const graphics = @import("graphics.zig");
+    const s = try Session.create(testing.allocator, .{ .cols = 20, .rows = 5 });
+    defer s.destroy();
+    try s.resize(20, 5, 10, 20);
+    // 1x1 red PNG, transmitted and placed (a=T, f=100), quietly (q=2).
+    const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==";
+    _ = s.feed("\x1b_Ga=T,f=100,i=7,q=2;" ++ png ++ "\x1b\\");
+    var out: [4 * graphics.placement_words]i32 = undefined;
+    const n = graphics.placements(s.terminal, &out);
+    try testing.expectEqual(@as(usize, 1), n);
+    try testing.expectEqual(@as(i32, 7), out[graphics.P.image_id]);
+    const px = (try graphics.imagePixels(testing.allocator, s.terminal, 7)).?;
+    defer testing.allocator.free(px.data);
+    try testing.expectEqual(@as(u32, 1), px.width);
+    try testing.expectEqual(@as(u8, 0xFF), px.data[0]);
+    try testing.expectEqual(@as(u8, 0x00), px.data[1]);
+}
+
+test "kitty graphics: support query is answered" {
+    const s = try Session.create(testing.allocator, .{ .cols = 20, .rows = 5 });
+    defer s.destroy();
+    const ev = s.feed("\x1b_Gi=31,s=1,v=1,a=q,t=d,f=24;AAAA\x1b\\");
+    try testing.expect(ev & term.Event.replies != 0);
+    try testing.expect(std.mem.indexOf(u8, s.replies.items, "OK") != null);
+}

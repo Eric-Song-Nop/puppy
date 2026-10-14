@@ -31,6 +31,9 @@ class TerminalFrame(
     val scrollLength: Int,
     val flags: Int,
 ) {
+    /** Kitty graphics placements, lowest z first. */
+    var images: List<KittyPlacement> = emptyList()
+        internal set
     enum class CursorStyle { BAR, BLOCK, UNDERLINE, BLOCK_HOLLOW }
 
     val altScreen get() = flags and FLAG_ALT_SCREEN != 0
@@ -87,6 +90,7 @@ class TerminalFrame(
         const val FLAG_CURSOR_KEYS = 1 shl 4
         const val FLAG_RENDER_HOLD = 1 shl 5
         const val FLAG_SCROLLED_BACK = 1 shl 6
+        const val FLAG_IMAGES = 1 shl 7
 
         const val ATTR_BOLD = 1 shl 0
         const val ATTR_ITALIC = 1 shl 1
