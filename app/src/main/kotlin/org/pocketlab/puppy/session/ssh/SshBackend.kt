@@ -64,7 +64,8 @@ class SshBackend(
     @Volatile private var size: TerminalSize = TerminalSize(80, 24, 0, 0)
     @Volatile private var client: SSHClient? = null
     @Volatile private var shell: Session.Shell? = null
-    private val outgoing = ArrayBlockingQueue<ByteArray>(256)
+    /** Keystrokes ([ByteArray]) and window changes ([TerminalSize]), sent in order by one thread. */
+    private val outgoing = ArrayBlockingQueue<Any>(256)
     private val pending = CopyOnWriteArraySet<CountDownLatch>()
     private lateinit var listener: SessionBackend.Listener
 
@@ -143,10 +144,19 @@ class SshBackend(
             val out = sh.outputStream
             try {
                 while (!closed) {
-                    val first = outgoing.poll(500, TimeUnit.MILLISECONDS) ?: continue
-                    out.write(first)
-                    // Batch whatever else is queued into the same packet.
-                    while (true) out.write(outgoing.poll() ?: break)
+                    var item: Any = outgoing.poll(500, TimeUnit.MILLISECONDS) ?: continue
+                    // Batch consecutive keystrokes into one packet; a window change
+                    // flushes first so requests keep their order with the data.
+                    while (true) {
+                        when (item) {
+                            is ByteArray -> out.write(item)
+                            is TerminalSize -> {
+                                out.flush()
+                                sh.changeWindowDimensions(item.cols, item.rows, item.widthPx, item.heightPx)
+                            }
+                        }
+                        item = outgoing.poll() ?: break
+                    }
                     out.flush()
                 }
             } catch (_: IOException) {
@@ -162,11 +172,9 @@ class SshBackend(
 
     override fun resize(size: TerminalSize) {
         this.size = size
-        val sh = shell ?: return
-        try {
-            sh.changeWindowDimensions(size.cols, size.rows, size.widthPx, size.heightPx)
-        } catch (_: Exception) {
-        }
+        // Sent from the writer thread: SSHJ's packet encoder must not be used
+        // from two threads at once, or the stream's MAC breaks.
+        if (shell != null && !closed) outgoing.offer(size, 2, TimeUnit.SECONDS)
     }
 
     override fun close() {
