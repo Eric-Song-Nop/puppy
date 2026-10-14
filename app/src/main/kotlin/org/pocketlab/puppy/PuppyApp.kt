@@ -17,6 +17,8 @@ import org.pocketlab.puppy.session.SessionManager
 import org.pocketlab.puppy.session.SessionService
 import org.pocketlab.puppy.terminal.TerminalColors
 import org.pocketlab.puppy.terminal.TerminalView
+import org.pocketlab.puppy.theme.TerminalTheme
+import org.pocketlab.puppy.theme.ThemeRepository
 
 class PuppyApp : Application() {
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -26,6 +28,8 @@ class PuppyApp : Application() {
     lateinit var settings: SettingsRepository
         private set
     lateinit var runtime: RuntimeManager
+        private set
+    lateinit var themes: ThemeRepository
         private set
 
     private val _colors = MutableStateFlow(TerminalColors.DEFAULT)
@@ -39,6 +43,7 @@ class PuppyApp : Application() {
         super.onCreate()
         settings = SettingsRepository(this)
         runtime = RuntimeManager(this)
+        themes = ThemeRepository(this)
         sessions = SessionManager(this)
         sessions.onSessionsChanged = { count -> SessionService.update(this, count) }
 
@@ -47,6 +52,11 @@ class PuppyApp : Application() {
             sessions.scrollbackLines = initial.scrollbackLines
             sessions.restore()
             settings.settings.map { it.scrollbackLines }.distinctUntilChanged().collect { sessions.scrollbackLines = it }
+        }
+        scope.launch {
+            settings.settings.map { it.themeId }.distinctUntilChanged().collect { id ->
+                setColors(themes.loadOrDefault(id).toTerminalColors())
+            }
         }
         installRuntime()
     }
@@ -72,3 +82,13 @@ class PuppyApp : Application() {
         }
     }
 }
+
+fun TerminalTheme.toTerminalColors() = TerminalColors(
+    background = background,
+    foreground = foreground,
+    cursor = cursorColor?.fixed,
+    palette = palette,
+    // Per-cell references aren't drawn by the renderer; it inverts instead.
+    selectionBackground = selectionBackground?.fixed,
+    selectionForeground = selectionForeground?.fixed,
+)

@@ -1,10 +1,40 @@
 package org.pocketlab.puppy.ui
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import org.pocketlab.puppy.PuppyApp
+import org.pocketlab.puppy.data.Settings
+import org.pocketlab.puppy.theme.ThemeRepository
+import org.pocketlab.puppy.theme.ui.ThemePickerScreen
+import org.pocketlab.puppy.toTerminalColors
 
 /** Screens provided by the SSH and theme packages. */
 @Composable
 fun Destinations(app: PuppyApp, screen: Screen, navigate: (Screen) -> Unit, back: () -> Unit) {
-    PlaceholderScreen(screen.toString(), back)
+    val scope = rememberCoroutineScope()
+    val settings by app.settings.settings.collectAsState(initial = Settings())
+    when (screen) {
+        Screen.Themes -> {
+            // Previews change only the active tab's default colors; programs' OSC colors survive.
+            val previewId = app.sessions.activeId.collectAsState().value
+            ThemePickerScreen(
+                repository = app.themes,
+                currentId = settings.themeId ?: ThemeRepository.DEFAULT_THEME_ID,
+                onPreview = { theme -> previewId?.let { app.sessions.previewColors(it, theme.toTerminalColors()) } },
+                onApply = { theme ->
+                    scope.launch { app.settings.setTheme(theme.id) }
+                    app.setColors(theme.toTerminalColors())
+                    back()
+                },
+                onCancel = {
+                    previewId?.let { app.sessions.endPreview(it) }
+                    back()
+                },
+            )
+        }
+        else -> PlaceholderScreen(screen.toString(), back)
+    }
 }

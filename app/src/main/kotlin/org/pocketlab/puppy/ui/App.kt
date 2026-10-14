@@ -34,7 +34,13 @@ fun PuppyRoot(app: PuppyApp) {
     val colors by app.colors.collectAsState()
     val stack = remember { mutableStateListOf<Screen>(Screen.Workspace) }
     val navigate: (Screen) -> Unit = { stack.add(it) }
-    val back: () -> Unit = { if (stack.size > 1) stack.removeAt(stack.lastIndex) }
+    val back: () -> Unit = {
+        if (stack.size > 1) {
+            // Leaving the theme picker any way other than Apply drops the preview.
+            if (stack.last() == Screen.Themes) app.sessions.activeId.value?.let(app.sessions::endPreview)
+            stack.removeAt(stack.lastIndex)
+        }
+    }
     BackHandler(enabled = stack.size > 1, onBack = back)
 
     val chrome = Chrome.from(if (settings.uiFollowsTerminal) colors else org.pocketlab.puppy.terminal.TerminalColors.DEFAULT)

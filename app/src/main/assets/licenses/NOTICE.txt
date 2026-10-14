@@ -19,3 +19,8 @@ SSHJ — Apache License 2.0, Copyright (C) 2009-2024 the SSHJ contributors
 Bouncy Castle — MIT License, Copyright (c) 2000-2026 The Legion of the Bouncy Castle Inc.
 AndroidX, Jetpack Compose, Room, DataStore — Apache License 2.0, The Android Open Source Project
 Kotlin and kotlinx.coroutines — Apache License 2.0, JetBrains s.r.o. and contributors
+
+Ghostty theme snapshot (ghostty-themes-release-20261005-151109-31756e7)
+  Color schemes from iTerm2-Color-Schemes, MIT License, Mark Badolato and
+  contributors; see assets/themes/NOTICE. The license of the snapshot must be
+  re-confirmed against upstream before a public release.
