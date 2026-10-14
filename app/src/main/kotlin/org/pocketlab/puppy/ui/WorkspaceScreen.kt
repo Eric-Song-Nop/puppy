@@ -4,6 +4,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.graphics.Typeface
 import android.view.HapticFeedbackConstants
+import android.view.inputmethod.InputMethodManager
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -50,6 +51,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -323,6 +325,13 @@ private fun TerminalArea(app: PuppyApp, session: TerminalSession, settings: Sett
     )
     LaunchedEffect(session.id) {
         view.requestFocus()
+    }
+    DisposableEffect(view) {
+        onDispose {
+            // Other screens don't type into the terminal; don't leave its keyboard up.
+            context.getSystemService(InputMethodManager::class.java)?.hideSoftInputFromWindow(view.windowToken, 0)
+            view.clearSelection()
+        }
     }
     LaunchedEffect(session.id, settings.bell) {
         session.bells.collect {

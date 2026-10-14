@@ -77,10 +77,11 @@ class RuntimeManager(private val context: Context) {
     private fun installLocked(): State {
         _state.value = State.Verifying
         val manifest = manifest() ?: return State.Unavailable
-        val prefix = env.prefix.canonicalFile
+        val prefix = env.prefix
         val expectedPrefix = manifest.getString("prefix")
-        if (expectedPrefix != prefix.path) {
-            throw IOException("Runtime was built for $expectedPrefix but this app uses ${prefix.path}")
+        // Secondary users and app clones get a different data dir (design §4.2).
+        if (prefix.path != expectedPrefix || !LocalEnvironment.sameFile(File(expectedPrefix).parentFile!!, env.filesDir)) {
+            throw IOException("Runtime was built for $expectedPrefix but this app's data is in ${env.filesDir.path}")
         }
         val expectedSha = manifest.getString("sha256").lowercase()
         val revision = manifest.optString("revision", "unknown")
@@ -95,13 +96,15 @@ class RuntimeManager(private val context: Context) {
                 val actual = context.assets.open(assetZip).use { sha256(it) }
                 if (actual != expectedSha) throw IOException("Runtime archive is corrupt (checksum mismatch)")
 
-                val staging = File(env.filesDir, "usr-staging")
+                // Same directory spelling as PREFIX: /data/data and /data/user/0 are
+                // different mounts, and rename() across them fails with EXDEV.
+                val staging = File(prefix.parentFile, "usr-staging")
                 staging.deleteRecursively()
                 staging.mkdirs()
                 try {
                     extract(staging)
                     _state.value = State.Activating
-                    val old = File(env.filesDir, "usr-old")
+                    val old = File(prefix.parentFile, "usr-old")
                     old.deleteRecursively()
                     if (prefix.exists() && !prefix.renameTo(old)) throw IOException("Could not replace the old runtime")
                     if (!staging.renameTo(prefix)) {
@@ -113,6 +116,7 @@ class RuntimeManager(private val context: Context) {
                     staging.deleteRecursively()
                     throw e
                 }
+                runSecondStage()
                 smokeTest()
                 marker.writeText(revision)
             }
@@ -131,7 +135,8 @@ class RuntimeManager(private val context: Context) {
                     val entry = zip.nextEntry ?: break
                     val name = entry.name
                     if (name == "SYMLINKS.txt") {
-                        zip.bufferedReader().readLines().forEach { line ->
+                        // readBytes stops at the entry's end without closing the zip stream.
+                        zip.readBytes().decodeToString().lines().forEach { line ->
                             val parts = line.split('←')
                             if (parts.size == 2) links += parts[0] to parts[1]
                         }
@@ -180,17 +185,40 @@ class RuntimeManager(private val context: Context) {
         name.startsWith("bin/") || name.startsWith("libexec") || name.startsWith("lib/apt/apt-helper") ||
             name.startsWith("lib/apt/methods")
 
+    /**
+     * Newer Termux bootstraps finish package configuration in a second stage
+     * that needs the final PREFIX; run it once after activation.
+     */
+    private fun runSecondStage() {
+        val script = File(env.prefix, "etc").walkTopDown().maxDepth(6)
+            .firstOrNull { it.name == "termux-bootstrap-second-stage.sh" } ?: return
+        val bash = File(env.prefix, "bin/bash").takeIf { it.canExecute() } ?: File(env.prefix, "bin/sh")
+        val process = ProcessBuilder(bash.path, script.path)
+            .directory(env.filesDir)
+            .redirectErrorStream(true)
+            .apply { environment().putAll(runtimeEnv()) }
+            .start()
+        val out = process.inputStream.bufferedReader().readText()
+        if (!process.waitFor(5, TimeUnit.MINUTES) || process.exitValue() != 0) {
+            throw IOException("Runtime setup failed: ${out.takeLast(300)}")
+        }
+    }
+
+    private fun runtimeEnv(): Map<String, String> = mapOf(
+        "PATH" to "${env.prefix.path}/bin:/system/bin",
+        "PREFIX" to env.prefix.path,
+        "HOME" to env.home.path,
+        "TMPDIR" to File(env.prefix, "tmp").path,
+        "LANG" to "en_US.UTF-8",
+    )
+
     /** Runs the activated shell once; files that need the final PREFIX only work after activation. */
     private fun smokeTest() {
         val sh = File(env.prefix, "bin/sh")
         val process = ProcessBuilder(sh.path, "-c", "echo puppy-ok")
             .directory(env.filesDir)
             .redirectErrorStream(true)
-            .apply {
-                environment()["PATH"] = "${env.prefix.path}/bin:/system/bin"
-                environment()["PREFIX"] = env.prefix.path
-                environment()["LD_LIBRARY_PATH"] = "${env.prefix.path}/lib"
-            }
+            .apply { environment().putAll(runtimeEnv()) }
             .start()
         val out = process.inputStream.bufferedReader().readText()
         if (!process.waitFor(20, TimeUnit.SECONDS) || process.exitValue() != 0 || !out.contains("puppy-ok")) {

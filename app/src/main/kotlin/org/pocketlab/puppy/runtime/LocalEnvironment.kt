@@ -13,8 +13,15 @@ import org.pocketlab.puppy.session.local.LocalCommand
  */
 class LocalEnvironment(private val context: Context) {
     val filesDir: File = context.filesDir
-    val prefix = File(filesDir, "usr")
-    val home = File(filesDir, "home")
+
+    /**
+     * Runtime binaries hard-code `/data/data/<applicationId>/files/usr`
+     * (design §4.2); use that spelling when it is this app's files dir.
+     */
+    val prefix: File = File("/data/data/${context.packageName}/files").let { canonical ->
+        if (sameFile(canonical, filesDir)) File(canonical, "usr") else File(filesDir, "usr")
+    }
+    val home = File(prefix.parentFile, "home")
     val tmp = File(prefix, "tmp")
 
     fun runtimeReady(): Boolean = File(prefix, "bin/sh").canExecute() && File(filesDir, RUNTIME_READY_MARKER).exists()
@@ -58,6 +65,17 @@ class LocalEnvironment(private val context: Context) {
     }
 
     companion object {
+        /**
+         * True if both paths are the same directory. `/data/data` and
+         * `/data/user/0` are one directory through a mount, not a symlink,
+         * so canonical paths differ; compare device and inode instead.
+         */
+        fun sameFile(a: File, b: File): Boolean = runCatching {
+            val x = android.system.Os.stat(a.path)
+            val y = android.system.Os.stat(b.path)
+            x.st_dev == y.st_dev && x.st_ino == y.st_ino
+        }.getOrDefault(false)
+
         const val SYSTEM_SHELL = "/system/bin/sh"
         const val RUNTIME_READY_MARKER = "runtime.ready"
     }

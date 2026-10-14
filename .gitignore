@@ -11,3 +11,5 @@ native/zig-out/
 *.keystore
 *.jks
 native/zig-pkg/
+runtime/build/
+app/src/main/assets/runtime/
