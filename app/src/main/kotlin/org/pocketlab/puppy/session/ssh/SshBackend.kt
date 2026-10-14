@@ -48,8 +48,10 @@ import org.pocketlab.puppy.session.TerminalSize
  * changed keys are shown to the user through [SessionPrompt.HostKey] and
  * never accepted in the background. Authentication tries the profile's
  * identity, then a saved password, then keyboard-interactive and password
- * prompts. Secrets are kept in char arrays and zeroed after use; they are
- * never logged or put in status messages.
+ * prompts. Passwords and passphrases are char arrays zeroed after use.
+ * Decrypted private keys pass through a String because SSHJ's key parsers
+ * only accept one (and keep their own copies), so they stay in memory
+ * until collected. Secrets are never logged or put in status messages.
  */
 class SshBackend(
     context: Context,
