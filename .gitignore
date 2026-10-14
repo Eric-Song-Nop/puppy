@@ -10,3 +10,4 @@ native/.zig-cache/
 native/zig-out/
 *.keystore
 *.jks
+native/zig-pkg/

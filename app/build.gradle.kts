@@ -1,3 +1,6 @@
+import java.io.ByteArrayOutputStream
+import javax.inject.Inject
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -53,6 +56,66 @@ android {
 
 kotlin {
     jvmToolchain(17)
+}
+
+/** Builds libpuppy.so (Ghostty VT core, JNI and PTY) with the pinned Zig. */
+abstract class ZigBuildTask @Inject constructor(private val exec: ExecOperations) : DefaultTask() {
+    @get:InputDirectory @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val sourceDir: DirectoryProperty
+
+    @get:Input abstract val zig: Property<String>
+    @get:Input abstract val ndkDir: Property<String>
+    @get:Input abstract val abis: ListProperty<String>
+    @get:Input abstract val minSdk: Property<Int>
+    @get:Input abstract val release: Property<Boolean>
+
+    @get:OutputDirectory abstract val outputDir: DirectoryProperty
+
+    @TaskAction
+    fun build() {
+        val out = outputDir.get().asFile
+        out.deleteRecursively()
+        for (abi in abis.get()) {
+            val triple = when (abi) {
+                "arm64-v8a" -> "aarch64-linux-android"
+                "x86_64" -> "x86_64-linux-android"
+                else -> error("unsupported ABI $abi")
+            }
+            val log = ByteArrayOutputStream()
+            val result = exec.exec {
+                workingDir = sourceDir.get().asFile
+                environment("ANDROID_NDK_HOME", ndkDir.get())
+                commandLine(
+                    zig.get(), "build",
+                    "-Dtarget=$triple.${minSdk.get()}",
+                    "-Drelease=${release.get()}",
+                    "--prefix-lib-dir", File(out, abi).absolutePath,
+                    "--summary", "none",
+                )
+                standardOutput = log
+                errorOutput = log
+                isIgnoreExitValue = true
+            }
+            if (result.exitValue != 0) throw GradleException("zig build failed for $abi:\n$log")
+        }
+    }
+}
+
+val zigBuild = tasks.register<ZigBuildTask>("zigBuild") {
+    sourceDir.set(rootProject.layout.projectDirectory.dir("native"))
+    zig.set(providers.environmentVariable("ZIG").orElse("zig"))
+    ndkDir.set(androidComponents.sdkComponents.ndkDirectory.map { it.asFile.absolutePath })
+    abis.set(listOf("arm64-v8a"))
+    minSdk.set(26)
+    // The terminal core is too slow unoptimized, so debug APKs use release Zig too.
+    release.set(true)
+    outputDir.set(layout.buildDirectory.dir("zig/jniLibs"))
+}
+
+androidComponents {
+    onVariants { variant ->
+        variant.sources.jniLibs?.addGeneratedSourceDirectory(zigBuild, ZigBuildTask::outputDir)
+    }
 }
 
 dependencies {
