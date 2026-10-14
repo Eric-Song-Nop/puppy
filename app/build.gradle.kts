@@ -45,7 +45,7 @@ android {
     }
 
     packaging {
-        resources.excludes += listOf("META-INF/{AL2.0,LGPL2.1}", "META-INF/versions/9/OSGI-INF/MANIFEST.MF")
+        resources.excludes += listOf("META-INF/{AL2.0,LGPL2.1}", "META-INF/versions/9/OSGI-INF/MANIFEST.MF", "META-INF/LICENSE.md", "META-INF/NOTICE.md")
     }
 
     lint {
@@ -56,6 +56,10 @@ android {
 
 kotlin {
     jvmToolchain(17)
+}
+
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
 }
 
 /** Builds libpuppy.so (Ghostty VT core, JNI and PTY) with the pinned Zig. */
@@ -132,6 +136,13 @@ dependencies {
     implementation(libs.compose.ui.tooling.preview)
     debugImplementation(libs.compose.ui.tooling)
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.room.runtime)
+    implementation(libs.room.ktx)
+    ksp(libs.room.compiler)
+    implementation(libs.datastore.preferences)
+    implementation(libs.sshj)
+    implementation(libs.bouncycastle.prov)
+    implementation(libs.bouncycastle.pkix)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
