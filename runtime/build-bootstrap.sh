@@ -45,8 +45,36 @@ grep -q "TERMUX_APP__PACKAGE_NAME=\"$APP_ID\"" "$WORK/scripts/properties.sh"
 grep -q '^TERMUX_REPO_APP__PACKAGE_NAME="com.termux"' "$WORK/scripts/properties.sh"
 
 # The builder image is amd64-only; Docker Desktop emulates it on Apple Silicon.
+EMULATED=false
 if [ "$(uname -m)" = arm64 ] || [ "$(uname -m)" = aarch64 ]; then
+	EMULATED=true
 	export TERMUX_DOCKER_RUN_EXTRA_ARGS="--platform linux/amd64 ${TERMUX_DOCKER_RUN_EXTRA_ARGS:-}"
+fi
+
+# run-docker.sh only grants fuse (needed by the NDK toolchain's
+# fuse-overlayfs) on Linux hosts; Docker Desktop on macOS needs it too.
+if [ "$(uname)" = Darwin ]; then
+	export TERMUX_DOCKER_RUN_EXTRA_ARGS="--cap-add SYS_ADMIN --device /dev/fuse --security-opt seccomp=$WORK/scripts/profile.json ${TERMUX_DOCKER_RUN_EXTRA_ARGS:-}"
+fi
+
+# Start (or reuse) the builder container.
+(cd "$WORK" && ./scripts/run-docker.sh true)
+
+if $EMULATED; then
+	# Docker Desktop's amd64 emulation has no openat2(2), and the image's
+	# security-patched GNU tar (1.35+dfsg-4ubuntu0.4) fails every nested
+	# extraction with ENOSYS. Use the same series' base build in the
+	# throwaway container; the archives it unpacks are checksummed by the
+	# package recipes.
+	TAR_DEB=tar_1.35+dfsg-4_amd64.deb
+	TAR_SHA256=4e066f8382f775d6600eee715add8fdc8da5ea8f0cf7b0f715aba38c8d57d64f
+	docker exec termux-package-builder sh -euc "
+		if ! dpkg -s tar | grep -q '^Version: 1.35+dfsg-4\$'; then
+			cd /tmp
+			curl -fsSLO https://archive.ubuntu.com/ubuntu/pool/main/t/tar/$TAR_DEB
+			echo '$TAR_SHA256  $TAR_DEB' | sha256sum -c -
+			sudo dpkg -i $TAR_DEB
+		fi"
 fi
 
 (cd "$WORK" && ./scripts/run-docker.sh ./scripts/build-bootstraps.sh --architectures "$ARCH")
@@ -66,4 +94,6 @@ cat > "$ASSETS/bootstrap-$ABI.json" <<JSON
   "execMode": "direct-exec-target-28"
 }
 JSON
-echo "Installed $ASSETS/bootstrap-$ABI.zip ($SHA)"
+# No Puppy package repository exists yet: never point apt at com.termux's.
+python3 "$ROOT/runtime/finalize-bootstrap.py" "$ASSETS/bootstrap-$ABI.zip" "$ASSETS/bootstrap-$ABI.json"
+echo "Installed $ASSETS/bootstrap-$ABI.zip"
