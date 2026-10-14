@@ -228,11 +228,34 @@ class TerminalView @JvmOverloads constructor(context: Context, attrs: AttributeS
     internal fun commitText(text: String) {
         val s = session ?: return
         clearSelection()
-        val parts = text.split('\n')
-        parts.forEachIndexed { index, part ->
-            if (part.isNotEmpty()) s.sendText(part)
-            if (index < parts.size - 1) sendKey(KeyEvent.KEYCODE_ENTER)
+        // ASCII goes through the key encoder (press + release) so programs
+        // using the Kitty keyboard protocol see real keys; other text (CJK
+        // IME commits, emoji) is sent as text. All paths run on the core
+        // thread in order.
+        val run = StringBuilder()
+        fun flush() {
+            if (run.isNotEmpty()) s.sendText(run.toString())
+            run.setLength(0)
         }
+        for (c in text) {
+            if (c == '\n') {
+                flush()
+                sendKey(KeyEvent.KEYCODE_ENTER)
+                continue
+            }
+            val key = KeyMapper.forChar(c)
+            if (key == null) {
+                run.append(c)
+                continue
+            }
+            flush()
+            for (action in intArrayOf(KeyMapper.ACTION_PRESS, KeyMapper.ACTION_RELEASE)) {
+                s.core.encodeKey(key.key, key.text, key.mods, key.consumedMods, action, key.unshifted) {
+                    s.writeFromCore(it)
+                }
+            }
+        }
+        flush()
     }
 
     internal fun sendKey(keyCode: Int) {

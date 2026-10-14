@@ -85,6 +85,33 @@ object KeyMapper {
 
     private const val KeyCharacterMapCombining = 0x80000000.toInt()
 
+    private val punctuation = mapOf(
+        '`' to "backquote", '\\' to "backslash", '[' to "bracket_left", ']' to "bracket_right",
+        ',' to "comma", '=' to "equal", '-' to "minus", '.' to "period", '\'' to "quote",
+        ';' to "semicolon", '/' to "slash", ' ' to "space",
+    )
+
+    /**
+     * A key press for one printable ASCII character committed by an input
+     * method (soft keyboards send text, not key events). Going through the
+     * key encoder keeps it correct under the Kitty keyboard protocol, which
+     * programs like herdr enable; in legacy mode it still encodes as the
+     * plain character. Returns null for anything else.
+     */
+    fun forChar(c: Char): Encoded? {
+        if (c.code !in 0x20..0x7E) return null
+        val name = when (c) {
+            in 'a'..'z' -> "key_$c"
+            in 'A'..'Z' -> "key_" + c.lowercaseChar()
+            in '0'..'9' -> "digit_$c"
+            else -> punctuation[c] ?: "unidentified"
+        }
+        val shifted = c in 'A'..'Z'
+        val mods = if (shifted) MOD_SHIFT else 0
+        val unshifted = if (shifted) c.lowercaseChar().code else c.code
+        return Encoded(name, c.toString(), mods, mods, ACTION_PRESS, unshifted)
+    }
+
     fun isSystemKey(code: Int) = when (code) {
         KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_HOME, KeyEvent.KEYCODE_VOLUME_UP, KeyEvent.KEYCODE_VOLUME_DOWN,
         KeyEvent.KEYCODE_VOLUME_MUTE, KeyEvent.KEYCODE_POWER, KeyEvent.KEYCODE_APP_SWITCH, KeyEvent.KEYCODE_MENU,

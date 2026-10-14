@@ -30,4 +30,20 @@ class KeyMapperTest {
         assertEquals(KeyMapper.MOD_CTRL or KeyMapper.MOD_SHIFT, KeyMapper.mods(meta))
         assertEquals(KeyMapper.MOD_ALT, KeyMapper.mods(KeyEvent.META_ALT_ON))
     }
+
+    @Test fun committedCharactersBecomeKeys() {
+        val q = KeyMapper.forChar('q')!!
+        assertEquals("key_q", q.key)
+        assertEquals("q", q.text)
+        assertEquals(0, q.mods)
+        val upper = KeyMapper.forChar('Q')!!
+        assertEquals("key_q", upper.key)
+        assertEquals(KeyMapper.MOD_SHIFT, upper.mods)
+        assertEquals('q'.code, upper.unshifted)
+        assertEquals("digit_7", KeyMapper.forChar('7')!!.key)
+        assertEquals("space", KeyMapper.forChar(' ')!!.key)
+        assertEquals("unidentified", KeyMapper.forChar('!')!!.key)
+        assertNull(KeyMapper.forChar('中'))
+        assertNull(KeyMapper.forChar('\t'))
+    }
 }

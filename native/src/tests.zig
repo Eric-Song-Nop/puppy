@@ -200,3 +200,34 @@ test "ctrl+space encodes as NUL in legacy mode and CSI u in kitty mode" {
     try s.encodeKey(&aw.writer, "space", " ", 0b10, 0, 1, ' ');
     try testing.expectEqualStrings("\x1b[32;5u", aw.written());
 }
+
+test "a committed letter under the kitty keyboard protocol is a CSI u key" {
+    const s = try Session.create(testing.allocator, .{ .cols = 10, .rows = 2 });
+    defer s.destroy();
+    var aw: std.Io.Writer.Allocating = .init(testing.allocator);
+    defer aw.deinit();
+    // Legacy: plain text.
+    try s.encodeKey(&aw.writer, "key_q", "q", 0, 0, 1, 'q');
+    try testing.expectEqualStrings("q", aw.written());
+    // Disambiguate + event types + report all keys (as crossterm apps push).
+    _ = s.feed("\x1b[>11u");
+    aw.clearRetainingCapacity();
+    try s.encodeKey(&aw.writer, "key_q", "q", 0, 0, 1, 'q');
+    try testing.expectEqualStrings("\x1b[113u", aw.written());
+    aw.clearRetainingCapacity();
+    try s.encodeKey(&aw.writer, "key_q", "q", 0, 0, 0, 'q');
+    try testing.expectEqualStrings("\x1b[113;1:3u", aw.written());
+}
+
+test "herdr's kitty flags (1|2|4): text key press is text, release is CSI u" {
+    const s = try Session.create(testing.allocator, .{ .cols = 10, .rows = 2 });
+    defer s.destroy();
+    var aw: std.Io.Writer.Allocating = .init(testing.allocator);
+    defer aw.deinit();
+    _ = s.feed("\x1b[>7u");
+    try s.encodeKey(&aw.writer, "key_q", "q", 0, 0, 1, 'q');
+    try testing.expectEqualStrings("q", aw.written());
+    aw.clearRetainingCapacity();
+    try s.encodeKey(&aw.writer, "key_q", "q", 0, 0, 0, 'q');
+    try testing.expectEqualStrings("\x1b[113;1:3u", aw.written());
+}
