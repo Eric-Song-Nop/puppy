@@ -25,7 +25,7 @@ rsync -a --delete --exclude build/ "$ROOT/runtime/" "$HOST:$REMOTE_DIR/runtime/"
 
 # Run detached so a dropped SSH connection doesn't kill a long build.
 ssh "$HOST" "cd $REMOTE_DIR && mkdir -p runtime/build && rm -f runtime/build/status-$ARCH &&
-	nohup sh -c 'runtime/build-bootstrap.sh $ARCH > runtime/build/bootstrap-$ARCH.log 2>&1; echo \$? > runtime/build/status-$ARCH' >/dev/null 2>&1 &"
+	nohup sh -c 'PUPPY_BOOTSTRAP_FORCE=${PUPPY_BOOTSTRAP_FORCE:-} runtime/build-bootstrap.sh $ARCH > runtime/build/bootstrap-$ARCH.log 2>&1; echo \$? > runtime/build/status-$ARCH' >/dev/null 2>&1 &"
 echo "Building on $HOST; log: ~/$REMOTE_DIR/runtime/build/bootstrap-$ARCH.log"
 
 while :; do

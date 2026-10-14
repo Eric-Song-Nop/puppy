@@ -85,10 +85,24 @@ if $EMULATED; then
 fi
 
 SRC=/home/builder/termux-packages
-docker exec "$CONTAINER" sh -c "rm -rf $SRC && mkdir -p $SRC"
+# PUPPY_BOOTSTRAP_FORCE=1 forgets what was built (upstream's -f is unsafe:
+# with its variables unset it runs `rm -f /*`).
+if [ -n "${PUPPY_BOOTSTRAP_FORCE:-}" ]; then
+	docker exec "$CONTAINER" sh -c "rm -rf /data/data/.built-packages /home/builder/.termux-build/.built-packages $SRC/output"
+fi
+
+# Keep output/: the built .debs live there, and termux-packages' "already
+# built" markers inside the container would otherwise skip rebuilding them.
+docker exec "$CONTAINER" sh -c "mkdir -p $SRC && find $SRC -mindepth 1 -maxdepth 1 ! -name output -exec rm -rf {} +"
 tar -C "$WORK" --exclude=./.git --exclude=./output -cf - . | docker exec -i "$CONTAINER" tar -C "$SRC" -xf -
-docker exec -w "$SRC" "$CONTAINER" ./scripts/build-bootstraps.sh --architectures "$ARCH"
+# No package repository exists yet, so no apt: the default set's apt and
+# its network stack (gnutls -> unbound -> Python -> X11) buy nothing.
+PACKAGES="bash coreutils dash diffutils ed findutils gawk grep gzip less nano patch procps psmisc sed tar termux-core termux-exec termux-tools unzip util-linux"
+docker exec -e PUPPY_BOOTSTRAP_PACKAGES="${PUPPY_BOOTSTRAP_PACKAGES:-$PACKAGES}" -w "$SRC" "$CONTAINER" \
+	./scripts/build-bootstraps.sh --architectures "$ARCH"
 docker cp "$CONTAINER:$SRC/bootstrap-$ARCH.zip" "$WORK/bootstrap-$ARCH.zip"
+# A bootstrap without its packages builds "successfully"; refuse to ship it.
+python3 -c 'import sys, zipfile; n = zipfile.ZipFile(sys.argv[1]).namelist(); sys.exit(0 if "bin/bash" in n and len(n) > 200 else "bootstrap is missing its packages (no bin/bash)")' "$WORK/bootstrap-$ARCH.zip"
 
 ZIP="$WORK/bootstrap-$ARCH.zip"
 [ -f "$ZIP" ] || { echo "bootstrap was not produced: $ZIP" >&2; exit 1; }
