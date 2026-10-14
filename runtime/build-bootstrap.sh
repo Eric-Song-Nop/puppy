@@ -97,7 +97,7 @@ docker exec "$CONTAINER" sh -c "mkdir -p $SRC && find $SRC -mindepth 1 -maxdepth
 tar -C "$WORK" --exclude=./.git --exclude=./output -cf - . | docker exec -i "$CONTAINER" tar -C "$SRC" -xf -
 # No package repository exists yet, so no apt: the default set's apt and
 # its network stack (gnutls -> unbound -> Python -> X11) buy nothing.
-PACKAGES="bash coreutils dash diffutils ed findutils gawk grep gzip less nano patch procps psmisc sed tar termux-core termux-exec termux-tools unzip util-linux"
+PACKAGES="bash coreutils dash diffutils ed findutils gawk grep gzip less nano patch procps psmisc sed tar termux-core termux-exec unzip util-linux"
 docker exec -e PUPPY_BOOTSTRAP_PACKAGES="${PUPPY_BOOTSTRAP_PACKAGES:-$PACKAGES}" -w "$SRC" "$CONTAINER" \
 	./scripts/build-bootstraps.sh --architectures "$ARCH"
 docker cp "$CONTAINER:$SRC/bootstrap-$ARCH.zip" "$WORK/bootstrap-$ARCH.zip"
