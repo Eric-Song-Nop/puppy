@@ -24,3 +24,8 @@ Ghostty theme snapshot (ghostty-themes-release-20261005-151109-31756e7)
   Color schemes from iTerm2-Color-Schemes, MIT License, Mark Badolato and
   contributors; see assets/themes/NOTICE. The license of the snapshot must be
   re-confirmed against upstream before a public release.
+
+Symbols Nerd Font Mono 3.5.1 (assets/fonts/SymbolsNerdFontMono-Regular.ttf)
+  MIT License, Copyright (c) 2014 Ryan L McIntyre; icon sets under their own
+  licenses (MIT, OFL-1.1, Apache-2.0, CC BY 4.0...), listed in
+  licenses/NerdFonts-README.md. https://github.com/ryanoasis/nerd-fonts

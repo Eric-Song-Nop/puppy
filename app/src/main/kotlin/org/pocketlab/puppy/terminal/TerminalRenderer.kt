@@ -27,7 +27,13 @@ import org.pocketlab.puppy.terminal.TerminalFrame.Companion.WIDE_WIDE
  * equals the cell width); everything else is drawn per cell and squeezed
  * horizontally if a fallback glyph is wider than its cells.
  */
-class TerminalRenderer(typeface: Typeface, textSizePx: Float, private val density: Float) {
+class TerminalRenderer(
+    typeface: Typeface,
+    textSizePx: Float,
+    private val density: Float,
+    /** Nerd Font icons (Powerline, Font Awesome, Material Design...), or null. */
+    private val symbols: Typeface? = null,
+) {
     private val regular = Typeface.create(typeface, Typeface.NORMAL)
     private val bold = Typeface.create(typeface, Typeface.BOLD)
 
@@ -115,9 +121,13 @@ class TerminalRenderer(typeface: Typeface, textSizePx: Float, private val densit
         return cp in 0x21..0x7E && frame.wide(i) == 0 && !frame.graphemes.containsKey(i)
     }
 
-    private fun applyStyle(fg: Int, attrs: Int) {
+    private fun applyStyle(fg: Int, attrs: Int, codepoint: Int = 0) {
         textPaint.color = if (attrs and ATTR_FAINT != 0) (fg and 0x00FFFFFF) or (0x99 shl 24) else fg
-        textPaint.typeface = if (attrs and ATTR_BOLD != 0) bold else regular
+        textPaint.typeface = when {
+            symbols != null && isNerdSymbol(codepoint) -> symbols
+            attrs and ATTR_BOLD != 0 -> bold
+            else -> regular
+        }
         textPaint.textSkewX = if (attrs and ATTR_ITALIC != 0) -0.2f else 0f
         textPaint.textScaleX = 1f
     }
@@ -154,11 +164,13 @@ class TerminalRenderer(typeface: Typeface, textSizePx: Float, private val densit
             }
             // Single cell: wide characters, graphemes, symbols, fallback fonts.
             val text = frame.cellText(i)
-            applyStyle(fg, attrs)
+            val cp = frame.codepoints[i]
+            applyStyle(fg, attrs, cp)
             val target = cellWidth * (if (w == WIDE_WIDE) 2 else 1)
-            val measured = glyphWidths.getOrPut(frame.codepoints[i] xor (text.length shl 24)) { textPaint.measureText(text) }
+            val measured = glyphWidths.getOrPut(cp xor (text.length shl 24)) { textPaint.measureText(text) }
             if (measured > target * 1.05f) textPaint.textScaleX = target / measured
-            val dx = if (measured < target && w == WIDE_WIDE) (target - measured) / 2 else 0f
+            // Center wide glyphs and icons that are narrower than their cells.
+            val dx = if (measured < target && (w == WIDE_WIDE || isNerdSymbol(cp))) (target - measured) / 2 else 0f
             canvas.drawText(text, x * cellWidth + dx, base, textPaint)
             x += if (w == WIDE_WIDE) 2 else 1
         }
@@ -226,7 +238,7 @@ class TerminalRenderer(typeface: Typeface, textSizePx: Float, private val densit
                 canvas.drawRect(left, top, right, bottom, fillPaint)
                 val text = frame.cellText(i)
                 if (text.isNotEmpty()) {
-                    applyStyle(frame.background[i].let { if (it == color) frame.defaultBackground else it }, frame.attrs[i])
+                    applyStyle(frame.background[i].let { if (it == color) frame.defaultBackground else it }, frame.attrs[i], frame.codepoints[i])
                     canvas.drawText(text, left, top + baseline, textPaint)
                 }
             }
@@ -268,5 +280,13 @@ class TerminalRenderer(typeface: Typeface, textSizePx: Float, private val densit
 
     companion object {
         const val LINE_SPACING = 1.15f
+
+        /**
+         * Codepoints Nerd Fonts v3 assigns to icons: the BMP private use area
+         * (Powerline, Seti, Devicons, Codicons, Font Awesome, Octicons...), the
+         * plane-15 private use area (Material Design) and the IEC power symbols.
+         */
+        fun isNerdSymbol(cp: Int): Boolean =
+            cp in 0xE000..0xF8FF || cp in 0xF0000..0xFFFFD || cp in 0x23FB..0x23FE || cp == 0x2B58
     }
 }

@@ -125,7 +125,7 @@ class TerminalView @JvmOverloads constructor(context: Context, attrs: AttributeS
 
     private fun createRenderer(previous: TerminalRenderer?): TerminalRenderer {
         val px = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, fontSizeSp, resources.displayMetrics)
-        return TerminalRenderer(typeface, px, density).also { r ->
+        return TerminalRenderer(typeface, px, density, symbolsTypeface(context)).also { r ->
             r.selectionBackground = previous?.selectionBackground
             r.selectionForeground = previous?.selectionForeground
         }
@@ -606,6 +606,13 @@ class TerminalView @JvmOverloads constructor(context: Context, attrs: AttributeS
     }
 
     companion object {
+        @Volatile private var symbols: Typeface? = null
+
+        /** The bundled Symbols Nerd Font Mono, loaded once per process. */
+        private fun symbolsTypeface(context: Context): Typeface? = symbols ?: runCatching {
+            Typeface.createFromAsset(context.applicationContext.assets, "fonts/SymbolsNerdFontMono-Regular.ttf")
+        }.getOrNull()?.also { symbols = it }
+
         const val DEFAULT_FONT_SP = 13f
         const val MIN_FONT_SP = 6f
         const val MAX_FONT_SP = 36f
