@@ -58,7 +58,7 @@ files/runtime-staging/                     首次安装的临时内容
 files/session-state/                       会话元数据及可选有限滚动记录
 ```
 
-**建议：**尽早固定一个较短包名及 PREFIX。为 arm64-v8a 构建应用、bootstrap 和所有随附运行库；x86_64 用于模拟器/测试，需要独立同前缀包产物。不要一开始承担所有 ABI。构建器配置包名、路径、仓库 URL、签名信任根；保留上游配方并维护少量可追踪补丁。`sources.list` 默认只指向本项目签名、按 ABI 发布的仓库，不指向为 `com.termux` 编译的上游二进制源。上游源是配方/源码来源，不是可无条件复用的二进制仓库。[S11]
+**建议：**尽早固定一个较短包名及 PREFIX。为 arm64-v8a 构建应用、bootstrap 和所有随附运行库；模拟器/测试同样使用 arm64-v8a（Apple Silicon 主机原生运行），无需额外 ABI 包产物；x86_64 仅在确有 x86 测试主机时再加入，并需独立同前缀包产物。不要一开始承担所有 ABI。构建器配置包名、路径、仓库 URL、签名信任根；保留上游配方并维护少量可追踪补丁。`sources.list` 默认只指向本项目签名、按 ABI 发布的仓库，不指向为 `com.termux` 编译的上游二进制源。上游源是配方/源码来源，不是可无条件复用的二进制仓库。[S11]
 
 **建议包集：**首版维护 shell、coreutils、findutils、grep/sed、tar/压缩工具、CA 证书、curl、apt/dpkg、git、openssh 客户端、terminfo 与 termux-exec 所需部分；再按用户范围加入 Python、Node、tmux、编辑器和编译器。完整 Termux 仓库兼容是长期维护目标，不作为第一版承诺。为每个包保存源码版本、补丁、构建日志、依赖、校验和及许可证。仓库元数据签名，固定信任根，保留上一个可恢复的已发布仓库快照。
 

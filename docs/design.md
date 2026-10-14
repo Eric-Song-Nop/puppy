@@ -105,9 +105,9 @@ PTY 模式下保留原始字节流，不进行按行读取或预先 UTF-8 解码
 | 参数 | 设计选择 | 验证要求 |
 | --- | --- | --- |
 | `minSdk` | 初始建议 26（Android 8）；最终随所选核心和字体实现验证 | 若实现需要更高 API，使用兼容路径或显式上调，不能运行时崩溃 |
-| `compileSdk` | 初始采用 36；依赖需要更高稳定 SDK 时统一升级 | 编译 SDK 不决定旧执行行为 |
+| `compileSdk` | 采用 37（当前 AndroidX 依赖要求）；依赖需要更高稳定 SDK 时统一升级 | 编译 SDK 不决定旧执行行为 |
 | `targetSdk` | APK 兼容路线候选 28 | 必须通过目标系统的正常安装和软件包执行门槛，才确认为首版基线 |
-| ABI | arm64-v8a 正式发布；x86_64 用于可用的测试环境 | 原生库与 bootstrap 的 ABI 完全匹配 |
+| ABI | arm64-v8a 正式发布；开发与回归使用 arm64-v8a 模拟器（Apple Silicon 主机原生运行），含 16 KB 页镜像；x86_64 仅在确有 x86 测试主机时再加入 | 原生库与 bootstrap 的 ABI 完全匹配 |
 | 页面大小 | 4 KB 与 16 KB | 检查 APK 中库与安装后软件包 ELF；不能只检查 JNI 库 |
 
 这是一个明确的兼容取舍，不是“只要 APK 分发就不受 Android 限制”。Android 对 target API 29+ 的可写私有目录二进制执行有限制；较低 target 也不能规避所有系统与厂商行为。每次发布必须以普通用户安装方式在目标系统验证，不能把 root、ADB 允许旧 target 或修改系统策略作为产品安装步骤。[Android 执行限制](https://developer.android.com/about/versions/10/behavior-changes-10#execute-permission)、[页面大小要求](https://developer.android.com/guide/practices/page-sizes)
