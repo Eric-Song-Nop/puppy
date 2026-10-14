@@ -44,21 +44,28 @@ sed -i.orig \
 grep -q "TERMUX_APP__PACKAGE_NAME=\"$APP_ID\"" "$WORK/scripts/properties.sh"
 grep -q '^TERMUX_REPO_APP__PACKAGE_NAME="com.termux"' "$WORK/scripts/properties.sh"
 
-# The builder image is amd64-only; Docker Desktop emulates it on Apple Silicon.
+# Termux's builder image, run in a persistent container. Sources are copied
+# in instead of bind-mounted: Docker Desktop's shared folders refuse the
+# chown that scripts/run-docker.sh performs, and copying is faster anyway.
+# The container keeps ~/.termux-build, so rebuilds are incremental.
+IMAGE=ghcr.io/termux/package-builder
+CONTAINER=puppy-bootstrap-builder
+RUN_ARGS=(--cap-add SYS_ADMIN --device /dev/fuse --security-opt "seccomp=$WORK/scripts/profile.json")
+
 EMULATED=false
 if [ "$(uname -m)" = arm64 ] || [ "$(uname -m)" = aarch64 ]; then
+	# The image is amd64-only; Docker Desktop emulates it on Apple Silicon.
 	EMULATED=true
-	export TERMUX_DOCKER_RUN_EXTRA_ARGS="--platform linux/amd64 ${TERMUX_DOCKER_RUN_EXTRA_ARGS:-}"
+	RUN_ARGS+=(--platform linux/amd64)
 fi
 
-# run-docker.sh only grants fuse (needed by the NDK toolchain's
-# fuse-overlayfs) on Linux hosts; Docker Desktop on macOS needs it too.
-if [ "$(uname)" = Darwin ]; then
-	export TERMUX_DOCKER_RUN_EXTRA_ARGS="--cap-add SYS_ADMIN --device /dev/fuse --security-opt seccomp=$WORK/scripts/profile.json ${TERMUX_DOCKER_RUN_EXTRA_ARGS:-}"
+if ! docker container inspect "$CONTAINER" >/dev/null 2>&1; then
+	docker run --detach --init --tty --name "$CONTAINER" "${RUN_ARGS[@]}" "$IMAGE" >/dev/null
+	# Some packages misbehave with pids above 65535 (as run-docker.sh notes).
+	docker run --rm --privileged --pid="container:$CONTAINER" "${RUN_ARGS[@]}" "$IMAGE" \
+		sh -c 'echo 65535 | sudo tee /proc/sys/kernel/pid_max >/dev/null' || :
 fi
-
-# Start (or reuse) the builder container.
-(cd "$WORK" && ./scripts/run-docker.sh true)
+docker start "$CONTAINER" >/dev/null
 
 if $EMULATED; then
 	# Docker Desktop's amd64 emulation has no openat2(2), and the image's
@@ -68,7 +75,7 @@ if $EMULATED; then
 	# package recipes.
 	TAR_DEB=tar_1.35+dfsg-4_amd64.deb
 	TAR_SHA256=4e066f8382f775d6600eee715add8fdc8da5ea8f0cf7b0f715aba38c8d57d64f
-	docker exec termux-package-builder sh -euc "
+	docker exec "$CONTAINER" sh -euc "
 		if ! dpkg -s tar | grep -q '^Version: 1.35+dfsg-4\$'; then
 			cd /tmp
 			curl -fsSLO https://archive.ubuntu.com/ubuntu/pool/main/t/tar/$TAR_DEB
@@ -77,14 +84,18 @@ if $EMULATED; then
 		fi"
 fi
 
-(cd "$WORK" && ./scripts/run-docker.sh ./scripts/build-bootstraps.sh --architectures "$ARCH")
+SRC=/home/builder/termux-packages
+docker exec "$CONTAINER" sh -c "rm -rf $SRC && mkdir -p $SRC"
+tar -C "$WORK" --exclude=./.git --exclude=./output -cf - . | docker exec -i "$CONTAINER" tar -C "$SRC" -xf -
+docker exec -w "$SRC" "$CONTAINER" ./scripts/build-bootstraps.sh --architectures "$ARCH"
+docker cp "$CONTAINER:$SRC/bootstrap-$ARCH.zip" "$WORK/bootstrap-$ARCH.zip"
 
 ZIP="$WORK/bootstrap-$ARCH.zip"
 [ -f "$ZIP" ] || { echo "bootstrap was not produced: $ZIP" >&2; exit 1; }
 
 mkdir -p "$ASSETS"
 cp "$ZIP" "$ASSETS/bootstrap-$ABI.zip"
-SHA=$(shasum -a 256 "$ASSETS/bootstrap-$ABI.zip" | cut -d' ' -f1)
+SHA=$( (command -v sha256sum >/dev/null && sha256sum "$ASSETS/bootstrap-$ABI.zip" || shasum -a 256 "$ASSETS/bootstrap-$ABI.zip") | cut -d' ' -f1)
 cat > "$ASSETS/bootstrap-$ABI.json" <<JSON
 {
   "prefix": "/data/data/$APP_ID/files/usr",

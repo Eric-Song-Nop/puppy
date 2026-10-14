@@ -5,14 +5,25 @@ The APK can carry a bootstrap — a minimal Termux-derived Android userland
 `/data/data/org.pocketlab.puppy/files/usr` (design §5).
 
 ```sh
-runtime/build-bootstrap.sh aarch64   # needs Docker; takes hours
-./gradlew :app:assembleDebug         # bundles app/src/main/assets/runtime/*
+runtime/remote-build.sh <x86_64-linux-ssh-host> aarch64   # recommended
+runtime/build-bootstrap.sh aarch64                        # or locally (Docker)
+./gradlew :app:assembleDebug   # bundles app/src/main/assets/runtime/*
 ```
 
-The script pins `termux/termux-packages` to one commit, switches the package
+Build on an x86_64 Linux host: the builder image is amd64-only, and Apple
+Silicon has to emulate it (several times slower). `remote-build.sh` copies
+the scripts there, builds detached (a dropped SSH session doesn't stop it)
+and copies `bootstrap-<abi>.zip` and its manifest back into the gitignored
+assets directory. The remote container keeps Termux's build cache, so later
+builds only recompile what changed.
+
+`build-bootstrap.sh` pins `termux/termux-packages` to one commit, switches the package
 name, applies `runtime/patches/*.patch` and runs the upstream
-`build-bootstraps.sh` in Termux's Docker builder. Every package is built from
-source for our prefix; `com.termux` binaries are never reused.
+`build-bootstraps.sh` in Termux's builder image (sources are copied into a
+persistent container rather than bind-mounted). Every package is built from
+source for our prefix; `com.termux` binaries are never reused. With no Puppy
+package repository yet, `finalize-bootstrap.py` replaces the APT sources with
+a commented placeholder.
 
 At first launch `RuntimeManager` checks the archive's SHA-256 and prefix,
 extracts it to a staging directory under a cross-process lock, rejects unsafe
