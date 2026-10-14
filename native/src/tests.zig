@@ -187,3 +187,16 @@ test "kitty graphics: support query is answered" {
     try testing.expect(ev & term.Event.replies != 0);
     try testing.expect(std.mem.indexOf(u8, s.replies.items, "OK") != null);
 }
+
+test "ctrl+space encodes as NUL in legacy mode and CSI u in kitty mode" {
+    const s = try Session.create(testing.allocator, .{ .cols = 10, .rows = 2 });
+    defer s.destroy();
+    var aw: std.Io.Writer.Allocating = .init(testing.allocator);
+    defer aw.deinit();
+    try s.encodeKey(&aw.writer, "space", " ", 0b10, 0, 1, ' ');
+    try testing.expectEqualStrings("\x00", aw.written());
+    aw.clearRetainingCapacity();
+    _ = s.feed("\x1b[>1u");
+    try s.encodeKey(&aw.writer, "space", " ", 0b10, 0, 1, ' ');
+    try testing.expectEqualStrings("\x1b[32;5u", aw.written());
+}

@@ -155,6 +155,12 @@ class TerminalSession(
     /** Writes input; must be called on the core thread. Returns the viewport to the bottom. */
     fun writeFromCore(data: ByteArray) {
         if (data.isEmpty()) return
+        // Input logging for debugging key encoding. Off unless enabled with
+        // `adb shell setprop log.tag.PuppyInput DEBUG`; it records everything
+        // typed, including passwords.
+        if (android.util.Log.isLoggable(INPUT_LOG_TAG, android.util.Log.DEBUG)) {
+            android.util.Log.d(INPUT_LOG_TAG, describe(data))
+        }
         core.scrollToBottom()
         backend?.write(data)
     }
@@ -182,6 +188,19 @@ class TerminalSession(
         core.resize(size.cols, size.rows, cellWidth, cellHeight)
         // On the core thread, in order with input, and never blocking the UI.
         core.post { backend?.resize(size) }
+    }
+
+    private fun describe(data: ByteArray): String = data.joinToString(" ") { b ->
+        val v = b.toInt() and 0xFF
+        when {
+            v == 0x1B -> "ESC"
+            v in 0x21..0x7E -> v.toChar().toString()
+            else -> "%02x".format(v)
+        }
+    }
+
+    companion object {
+        const val INPUT_LOG_TAG = "PuppyInput"
     }
 
     /** Ends the backend (process group or connection) and frees native state. */
