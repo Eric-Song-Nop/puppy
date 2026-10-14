@@ -15,6 +15,7 @@ import org.pocketlab.puppy.data.SettingsRepository
 import org.pocketlab.puppy.runtime.RuntimeManager
 import org.pocketlab.puppy.session.SessionManager
 import org.pocketlab.puppy.session.SessionService
+import org.pocketlab.puppy.session.ssh.HostSshBackend
 import org.pocketlab.puppy.terminal.TerminalColors
 import org.pocketlab.puppy.terminal.TerminalView
 import org.pocketlab.puppy.theme.TerminalTheme
@@ -46,6 +47,7 @@ class PuppyApp : Application() {
         themes = ThemeRepository(this)
         sessions = SessionManager(this)
         sessions.onSessionsChanged = { count -> SessionService.update(this, count) }
+        sessions.sshFactory = SessionManager.SshBackendFactory { hostId -> HostSshBackend(this, hostId) }
 
         scope.launch {
             val initial = settings.settings.first()

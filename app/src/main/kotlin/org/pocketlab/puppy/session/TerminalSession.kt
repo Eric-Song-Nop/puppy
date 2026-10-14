@@ -107,6 +107,16 @@ class TerminalSession(
         _status.value = SessionStatus.Disconnected("Not connected since the app restarted")
     }
 
+    @Volatile private var startWhenSized = false
+
+    /**
+     * Starts once a view has measured the real terminal size, so the program
+     * doesn't begin at a placeholder size and immediately get SIGWINCH.
+     */
+    fun startOnFirstLayout() {
+        startWhenSized = true
+    }
+
     /** Whether [start] has been called at least once. */
     val started: Boolean get() = generation > 0
 
@@ -146,6 +156,15 @@ class TerminalSession(
     }
 
     fun resize(size: TerminalSize, cellWidth: Int, cellHeight: Int) {
+        if (startWhenSized) {
+            startWhenSized = false
+            this.size = size
+            this.cellWidth = cellWidth
+            this.cellHeight = cellHeight
+            core.resize(size.cols, size.rows, cellWidth, cellHeight)
+            start()
+            return
+        }
         if (size == this.size && cellWidth == this.cellWidth && cellHeight == this.cellHeight) return
         this.size = size
         this.cellWidth = cellWidth

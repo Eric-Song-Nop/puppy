@@ -52,7 +52,7 @@ class SessionManager(private val context: Context) {
             LocalPtyBackend(env.shellCommand())
         })
         add(s)
-        s.start()
+        s.startOnFirstLayout()
         return s
     }
 
@@ -60,7 +60,7 @@ class SessionManager(private val context: Context) {
         val factory = checkNotNull(sshFactory) { "SSH is not available" }
         val s = TerminalSession(SessionSpec.Ssh(hostId), label, scrollbackLines, lastSize, { factory.create(hostId) })
         add(s)
-        s.start()
+        s.startOnFirstLayout()
         return s
     }
 
@@ -189,7 +189,8 @@ class SessionManager(private val context: Context) {
             }
             s.setCustomTitle(custom)
             applyColors(s)
-            if (s.spec is SessionSpec.Local) s.start() else s.markRestored()
+            // Local tabs get a fresh shell when first shown; SSH waits for Reconnect.
+            if (s.spec is SessionSpec.Local) s.startOnFirstLayout() else s.markRestored()
             if (o.optBoolean("active")) activeId = s.id
             restored += s
         }

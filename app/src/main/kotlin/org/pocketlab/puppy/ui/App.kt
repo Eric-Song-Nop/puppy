@@ -49,7 +49,9 @@ fun PuppyRoot(app: PuppyApp) {
             when (val screen = stack.last()) {
                 Screen.Workspace -> WorkspaceScreen(app, settings, navigate)
                 Screen.Settings -> SettingsScreen(app, settings, navigate, back)
-                else -> Destinations(app, screen, navigate, back)
+                else -> Destinations(app, screen, navigate, back, backToWorkspace = {
+                    while (stack.size > 1) stack.removeAt(stack.lastIndex)
+                })
             }
         }
     }
