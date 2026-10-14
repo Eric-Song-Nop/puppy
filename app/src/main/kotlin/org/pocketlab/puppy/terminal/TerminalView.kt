@@ -148,6 +148,8 @@ class TerminalView @JvmOverloads constructor(context: Context, attrs: AttributeS
     // ---------------------------------------------------------------- draw
 
     override fun onDraw(canvas: Canvas) {
+        // Compose hosts this view without clipping, and drawColor fills the whole clip.
+        canvas.clipRect(0, 0, width, height)
         val frame = session?.frame
         if (frame == null) {
             canvas.drawColor(DEFAULT_BACKGROUND)

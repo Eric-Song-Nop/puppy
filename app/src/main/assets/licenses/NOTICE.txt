@@ -1,0 +1,21 @@
+Puppy
+Copyright (C) 2026 Puppy contributors
+Licensed under the GNU General Public License, version 3 only
+(GPL-3.0-only). Source code is published with each release.
+
+Third-party components
+----------------------
+
+Ghostty (libghostty-vt), commit 9f13eb7526cc070a2b829f2aae41a44d5cce12bf
+  MIT License, Copyright (c) 2024 Mitchell Hashimoto, Ghostty contributors
+  https://github.com/ghostty-org/ghostty
+  Includes simdutf (Apache-2.0 / MIT), Highway (Apache-2.0 / BSD-3-Clause),
+  uucode (MIT) and wuffs (Apache-2.0 / MIT) as built into libpuppy.so.
+
+Android NDK pty handling follows Termux (termux-app, GPL-3.0)
+  https://github.com/termux/termux-app
+
+SSHJ — Apache License 2.0, Copyright (C) 2009-2024 the SSHJ contributors
+Bouncy Castle — MIT License, Copyright (c) 2000-2026 The Legion of the Bouncy Castle Inc.
+AndroidX, Jetpack Compose, Room, DataStore — Apache License 2.0, The Android Open Source Project
+Kotlin and kotlinx.coroutines — Apache License 2.0, JetBrains s.r.o. and contributors

@@ -102,10 +102,18 @@ class TerminalSession(
         })
     }
 
+    /** Marks a tab restored from disk whose connection was not resumed. */
+    fun markRestored() {
+        _status.value = SessionStatus.Disconnected("Not connected since the app restarted")
+    }
+
+    /** Whether [start] has been called at least once. */
+    val started: Boolean get() = generation > 0
+
     /** Starts a new backend in place of one that exited or failed, keeping the screen. */
     fun restart() {
         backend?.close()
-        core.feed("\r\n".toByteArray())
+        if (started) core.feed("\r\n".toByteArray())
         start()
     }
 

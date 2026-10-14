@@ -24,6 +24,8 @@ android {
         ndk {
             abiFilters += listOf("arm64-v8a")
         }
+        // Keep in sync with native/build.zig.zon.
+        buildConfigField("String", "GHOSTTY_REVISION", "\"9f13eb7526cc070a2b829f2aae41a44d5cce12bf\"")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -42,6 +44,11 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+
+    androidResources {
+        // The runtime bootstrap is read with openFd and must stay uncompressed.
+        noCompress += "zip"
     }
 
     packaging {

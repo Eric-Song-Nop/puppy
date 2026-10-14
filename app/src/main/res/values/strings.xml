@@ -1,4 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Puppy</string>
+    <string name="channel_sessions">Open sessions</string>
+    <plurals name="sessions_open">
+        <item quantity="one">%d session open</item>
+        <item quantity="other">%d sessions open</item>
+    </plurals>
+    <string name="wake_lock_held">wake lock on</string>
+    <string name="acquire_wake_lock">Keep awake</string>
+    <string name="release_wake_lock">Allow sleep</string>
+    <string name="stop_all_sessions">Stop all</string>
 </resources>
