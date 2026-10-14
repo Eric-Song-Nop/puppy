@@ -48,11 +48,13 @@ mise install                          # Zig 0.16.0
 
 ## 当前状态
 
-已在 Android 16（16 KB 页，arm64 模拟器）验证：本地 Shell、Ghostty 解析与绘制、IME 输入、主题切换与预览、SSH（密钥认证、主机指纹确认、PTY、窗口变化）、运行环境安装流程（使用最小测试 bootstrap）。
+已在 Android 16（16 KB 页，arm64 模拟器）与 vivo X Fold2 验证：本地 Shell、Ghostty 解析与绘制、IME 输入（含 Unexpected Keyboard 与 Kitty 键盘协议）、Kitty 图像协议、Nerd Font 图标、主题切换与预览、SSH（密钥/密码认证、主机指纹确认、PTY、窗口变化）。
+
+本地运行环境：`runtime/remote-build.sh <x86_64 Linux 主机>` 以本应用 PREFIX 从源码构建最小 Termux bootstrap（bash 5.3、coreutils、grep/sed/gawk、tar/gzip、less、nano、procps 等），复制到 `app/src/main/assets/runtime/`（不入库，约 25 MB）后随 APK 打包，首启自动离线安装。
 
 尚未完成：
 
-- 尚未构建真正的 bootstrap（需要 Docker，数小时）；未打包时本地终端使用 `/system/bin/sh`。
-- 自有签名软件源与域名未确定（设计 §15 第 1 项），`pkg install` 暂无可用仓库。
-- 真机门槛（Unexpected Keyboard、中文 IME、外接键盘、TalkBack、厂商后台行为）未验证。
+- 未打包 bootstrap 的构建中，本地终端退回 `/system/bin/sh`。
+- 自有签名软件源与域名未确定（设计 §15 第 1 项），bootstrap 暂不含 apt，无法安装额外软件包。
+- 真机门槛（中文 IME、外接键盘、TalkBack、厂商后台行为）未验证。
 - 主题快照的许可证需在发布前与上游再次核对。
