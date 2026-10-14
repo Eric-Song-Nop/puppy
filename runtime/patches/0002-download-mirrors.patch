@@ -1,0 +1,51 @@
+Puppy: fall back to equivalent mirrors when a source host is unreachable
+(plain-http savannah and some GNU hosts fail from some networks). The
+recipe's sha256 must still match.
+
+diff --git a/scripts/build/termux_download.sh b/scripts/build/termux_download.sh
+index b3205cd..2e31467 100755
+--- a/scripts/build/termux_download.sh
++++ b/scripts/build/termux_download.sh
+@@ -54,6 +54,18 @@ termux_download() {
+ 	echo "Downloading ${URL}"
+ 	if ! curl "${CURL_OPTIONS[@]}" --output "$TMPFILE" "$URL"; then
+ 		local error=1
++		# Puppy: some source hosts are unreachable from some networks. Try
++		# equivalent mirrors; the checksum below still has to match.
++		local alt
++		for alt in $(termux_download_alternates "$URL"); do
++			echo "Trying mirror ${alt}"
++			if curl "${CURL_OPTIONS[@]}" --output "$TMPFILE" "$alt"; then
++				error=0
++				break
++			fi
++		done
++	fi
++	if [[ "${error-0}" != 0 ]]; then
+ 		local retry=2
+ 		local delay=60
+ 		local try
+@@ -87,6 +99,23 @@ termux_download() {
+ 	return 0
+ }
+ 
++# Puppy: prints mirror URLs equivalent to $1, one per line.
++termux_download_alternates() {
++	local url="$1"
++	local https="${url/#http:\/\//https://}"
++	[[ "$https" != "$url" ]] && echo "$https"
++	case "$https" in
++		https://download.savannah.gnu.org/releases/*|https://download.savannah.nongnu.org/releases/*)
++			echo "https://download-mirror.savannah.gnu.org/releases/${https#*/releases/}" ;;
++		https://ftp.gnu.org/gnu/*|https://mirrors.kernel.org/gnu/*|https://ftpmirror.gnu.org/*)
++			local path="${https#*/gnu/}"
++			[[ "$https" == https://ftpmirror.gnu.org/* ]] && path="${https#https://ftpmirror.gnu.org/}"
++			echo "https://ftpmirror.gnu.org/$path"
++			echo "https://mirrors.ustc.edu.cn/gnu/$path"
++			echo "https://ftp.gnu.org/gnu/$path" ;;
++	esac
++}
++
+ # Make script standalone executable as well as sourceable
+ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+ 	termux_download "$@"
