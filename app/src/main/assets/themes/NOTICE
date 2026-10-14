@@ -1,0 +1,12 @@
+Theme files in ghostty/ are an unmodified copy of ghostty-themes-release-20261005-151109-31756e7
+(https://deps.files.ghostty.org/ghostty-themes-release-20261005-151109-31756e7.tgz, sha256 574403c123bdd892699f7894bf5f85f81ce3ca0d9af18ce9885041a8b9d1e3f0),
+the theme snapshot pinned by Ghostty commit 9f13eb7526cc070a2b829f2aae41a44d5cce12bf.
+
+Ghostty publishes these themes from the iTerm2-Color-Schemes project
+(https://github.com/mbadolato/iTerm2-Color-Schemes), which is distributed
+under the MIT License; individual theme credits are recorded there.
+The archive itself contains no license file.
+
+x11-rgb.txt is Ghostty's X11 color name table (src/terminal/res/rgb.txt
+at commit 9f13eb7526cc070a2b829f2aae41a44d5cce12bf, MIT License), used to resolve named colors
+the same way Ghostty does. It is copied by hand, not by this script.
