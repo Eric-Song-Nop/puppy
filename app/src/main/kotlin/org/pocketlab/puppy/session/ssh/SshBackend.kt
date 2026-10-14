@@ -9,7 +9,7 @@ import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import java.security.PublicKey
 import java.util.Base64
-import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.CopyOnWriteArraySet
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -64,8 +64,14 @@ class SshBackend(
     @Volatile private var size: TerminalSize = TerminalSize(80, 24, 0, 0)
     @Volatile private var client: SSHClient? = null
     @Volatile private var shell: Session.Shell? = null
-    /** Keystrokes ([ByteArray]) and window changes ([TerminalSize]), sent in order by one thread. */
-    private val outgoing = ArrayBlockingQueue<Any>(256)
+    /**
+     * Keystrokes ([ByteArray]) and window-change markers ([RESIZE]), sent in
+     * order by one thread. Bounded: when full, writers block (backpressure);
+     * input is never dropped.
+     */
+    private val outgoing = LinkedBlockingQueue<Any>(MAX_QUEUED)
+    /** Latest size not yet sent; resizes coalesce instead of queuing each one. */
+    private val pendingSize = AtomicReference<TerminalSize?>(null)
     private val pending = CopyOnWriteArraySet<CountDownLatch>()
     private lateinit var listener: SessionBackend.Listener
 
@@ -150,9 +156,9 @@ class SshBackend(
                     while (true) {
                         when (item) {
                             is ByteArray -> out.write(item)
-                            is TerminalSize -> {
+                            RESIZE -> pendingSize.getAndSet(null)?.let { sz ->
                                 out.flush()
-                                sh.changeWindowDimensions(item.cols, item.rows, item.widthPx, item.heightPx)
+                                sh.changeWindowDimensions(sz.cols, sz.rows, sz.widthPx, sz.heightPx)
                             }
                         }
                         item = outgoing.poll() ?: break
@@ -166,15 +172,21 @@ class SshBackend(
     }
 
     override fun write(data: ByteArray) {
-        if (closed) return
-        outgoing.offer(data, 2, TimeUnit.SECONDS)
+        // Typed before the shell is up (connecting/authenticating) is kept and sent once it is.
+        while (!closed) {
+            if (outgoing.offer(data, 500, TimeUnit.MILLISECONDS)) return
+        }
     }
 
     override fun resize(size: TerminalSize) {
         this.size = size
         // Sent from the writer thread: SSHJ's packet encoder must not be used
         // from two threads at once, or the stream's MAC breaks.
-        if (shell != null && !closed) outgoing.offer(size, 2, TimeUnit.SECONDS)
+        if (shell == null || closed) return
+        // Only enqueue a marker if none is pending; the writer sends the latest size.
+        if (pendingSize.getAndSet(size) == null) {
+            while (!closed && !outgoing.offer(RESIZE, 500, TimeUnit.MILLISECONDS)) Unit
+        }
     }
 
     override fun close() {
@@ -204,6 +216,11 @@ class SshBackend(
         val latch = CountDownLatch(1)
         val result = AtomicReference<T?>(null)
         pending += latch
+        // close() may have run between the first check and registering the latch.
+        if (closed) {
+            pending -= latch
+            return null
+        }
         listener.onPrompt(build { answer ->
             if (latch.count > 0) {
                 result.set(answer)
@@ -238,6 +255,8 @@ class SshBackend(
                 SessionPrompt.HostKey(profile.hostname, profile.port, algorithm, fingerprint, changed) { answer(it) }
             } == true
             if (accepted) {
+                // A confirmed replacement supersedes every old key for this host.
+                if (changed) known.forEach { db.knownHosts().deleteBlocking(it) }
                 db.knownHosts().upsert(KnownHost(host = profile.hostname, port = profile.port, algorithm = algorithm, publicKey = encoded, fingerprint = fingerprint))
             }
             return accepted
@@ -379,6 +398,8 @@ class SshBackend(
 
     companion object {
         const val TERM = "xterm-256color"
+        private val RESIZE = Any()
+        private const val MAX_QUEUED = 4096
         private const val READ_SIZE = 16 * 1024
         private const val CONNECT_TIMEOUT_MS = 15_000
         private const val DEFAULT_TIMEOUT_MS = 30_000

@@ -57,16 +57,31 @@ object KeyMapper {
         } else {
             null
         }
-        if (name == null && text == null) return null
-        val consumed = if (text != null) mods and (MOD_SHIFT or MOD_CAPS) else 0
-        val action = when {
-            event.action == KeyEvent.ACTION_UP -> ACTION_RELEASE
-            event.repeatCount > 0 -> ACTION_REPEAT
-            else -> ACTION_PRESS
+        var effectiveMods = mods
+        var consumed = if (text != null) mods and (MOD_SHIFT or MOD_CAPS) else 0
+        // AltGr (right Alt) selects layout characters such as @ on German
+        // layouts: send that character, not Alt+key.
+        if (meta and KeyEvent.META_ALT_RIGHT_ON != 0) {
+            val altGrMeta = meta and (KeyEvent.META_CTRL_MASK or KeyEvent.META_META_MASK).inv()
+            val altGr = event.getUnicodeChar(altGrMeta)
+            if (altGr >= 0x20 && altGr != 0x7F && altGr and KeyCharacterMapCombining == 0 && altGr != unicode) {
+                effectiveMods = mods and MOD_ALT.inv()
+                consumed = consumed or MOD_ALT
+                return Encoded(name ?: "unidentified", String(Character.toChars(altGr)), effectiveMods, consumed, actionOf(event), unshiftedOf(event))
+            }
         }
-        val unshifted = event.getUnicodeChar(0).takeIf { it > 0 && it and KeyCharacterMapCombining == 0 } ?: 0
-        return Encoded(name ?: "unidentified", text, mods, consumed, action, unshifted)
+        if (name == null && text == null) return null
+        return Encoded(name ?: "unidentified", text, effectiveMods, consumed, actionOf(event), unshiftedOf(event))
     }
+
+    private fun actionOf(event: KeyEvent) = when {
+        event.action == KeyEvent.ACTION_UP -> ACTION_RELEASE
+        event.repeatCount > 0 -> ACTION_REPEAT
+        else -> ACTION_PRESS
+    }
+
+    private fun unshiftedOf(event: KeyEvent) =
+        event.getUnicodeChar(0).takeIf { it > 0 && it and KeyCharacterMapCombining == 0 } ?: 0
 
     private const val KeyCharacterMapCombining = 0x80000000.toInt()
 

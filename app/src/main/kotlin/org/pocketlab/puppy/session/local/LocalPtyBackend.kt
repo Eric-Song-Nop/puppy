@@ -5,7 +5,7 @@ import android.system.OsConstants
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.IOException
-import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import org.pocketlab.puppy.session.BackendCapabilities
 import org.pocketlab.puppy.session.SessionBackend
@@ -31,7 +31,8 @@ class LocalPtyBackend(private val command: LocalCommand) : SessionBackend {
     @Volatile private var fd = -1
     @Volatile private var pid = -1
     @Volatile private var exited = false
-    private val outgoing = ArrayBlockingQueue<ByteArray>(256)
+    /** Bounded: a full queue blocks the core thread (backpressure) rather than dropping input. */
+    private val outgoing = LinkedBlockingQueue<ByteArray>(MAX_QUEUED)
     private var pfd: ParcelFileDescriptor? = null
 
     override fun open(size: TerminalSize, listener: SessionBackend.Listener) {
@@ -90,7 +91,9 @@ class LocalPtyBackend(private val command: LocalCommand) : SessionBackend {
 
     override fun write(data: ByteArray) {
         if (exited || fd < 0) return
-        outgoing.offer(data, 2, TimeUnit.SECONDS)
+        while (!exited && fd >= 0) {
+            if (outgoing.offer(data, 500, TimeUnit.MILLISECONDS)) return
+        }
     }
 
     override fun resize(size: TerminalSize) {
@@ -123,5 +126,6 @@ class LocalPtyBackend(private val command: LocalCommand) : SessionBackend {
     companion object {
         private const val READ_SIZE = 8192
         private const val KILL_GRACE_MS = 3000L
+        private const val MAX_QUEUED = 4096
     }
 }

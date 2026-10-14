@@ -26,25 +26,21 @@ class SessionService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        running = true
         ensureChannel(this)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val manager = (application as PuppyApp).sessions
         when (intent?.action) {
-            ACTION_STOP_ALL -> {
-                manager.closeAll()
-                stopSelf()
-                return START_NOT_STICKY
-            }
+            ACTION_STOP_ALL -> manager.closeAll()
             ACTION_TOGGLE_WAKE_LOCK -> toggleWakeLock()
         }
+        // Always enter the foreground first: a service started with
+        // startForegroundService that stops without doing so crashes the app.
         val count = manager.sessions.value.size
-        if (count == 0) {
-            stopSelf()
-            return START_NOT_STICKY
-        }
-        startForeground(NOTIFICATION_ID, buildNotification(count))
+        startForeground(NOTIFICATION_ID, buildNotification(count.coerceAtLeast(1)))
+        if (count == 0) stopSelf()
         return START_NOT_STICKY
     }
 
@@ -86,6 +82,7 @@ class SessionService : Service() {
     }
 
     override fun onDestroy() {
+        running = false
         wakeLock?.let { if (it.isHeld) it.release() }
         wakeLock = null
         super.onDestroy()
@@ -93,6 +90,7 @@ class SessionService : Service() {
 
     companion object {
         private const val CHANNEL_ID = "sessions"
+        @Volatile private var running = false
         private const val NOTIFICATION_ID = 1
         const val ACTION_STOP_ALL = "org.pocketlab.puppy.STOP_ALL"
         const val ACTION_TOGGLE_WAKE_LOCK = "org.pocketlab.puppy.TOGGLE_WAKE_LOCK"
@@ -114,7 +112,8 @@ class SessionService : Service() {
             if (count > 0) {
                 if (Build.VERSION.SDK_INT >= 26) context.startForegroundService(intent) else context.startService(intent)
             } else {
-                context.stopService(intent)
+                // Let the service see the count and stop itself after startForeground.
+                if (running) context.startService(intent)
             }
         }
     }

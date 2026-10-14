@@ -84,6 +84,13 @@ class TerminalView @JvmOverloads constructor(context: Context, attrs: AttributeS
     }
 
     private var selection: Selection? = null
+        set(value) {
+            if (value != null && field == null) {
+                session?.frame?.let { selectionScroll = it.scrollTotal to it.scrollOffset }
+            }
+            field = value
+        }
+    private var selectionScroll = 0 to 0
     private var draggingHandle = HANDLE_NONE
     private var selectingByDrag = false
     private var actionMode: ActionMode? = null
@@ -159,6 +166,9 @@ class TerminalView @JvmOverloads constructor(context: Context, attrs: AttributeS
         canvas.drawColor(frame.defaultBackground)
         canvas.save()
         canvas.translate(paddingLeft.toFloat(), paddingTop.toFloat())
+        // The selection marks screen cells; once output scrolls them, it would
+        // cover different text, so drop it.
+        selection?.let { if (frame.scrollTotal != selectionScroll.first || frame.scrollOffset != selectionScroll.second) clearSelection() }
         renderer.selection = selection
         renderer.draw(canvas, frame, hasFocus(), cursorOn, preedit)
         selection?.let { drawHandles(canvas, it.normalized(), frame) }
@@ -266,14 +276,14 @@ class TerminalView @JvmOverloads constructor(context: Context, attrs: AttributeS
             cursorOn = true
         }
         s.core.encodeKey(encoded.key, encoded.text, encoded.mods, encoded.consumedMods, encoded.action, encoded.unshifted) {
-            s.write(it)
+            s.writeFromCore(it)
         }
         return true
     }
 
     override fun onFocusChanged(gainFocus: Boolean, direction: Int, previouslyFocusedRect: Rect?) {
         super.onFocusChanged(gainFocus, direction, previouslyFocusedRect)
-        session?.let { s -> s.core.encodeFocus(gainFocus) { s.write(it) } }
+        session?.let { s -> s.core.encodeFocus(gainFocus) { s.writeFromCore(it) } }
         invalidate()
     }
 
@@ -399,7 +409,7 @@ class TerminalView @JvmOverloads constructor(context: Context, attrs: AttributeS
         s.core.encodeMouse(
             action, button, KeyMapper.mods(meta), x - paddingLeft, y - paddingTop,
             (frame.cols * renderer.cellWidth).toInt(), (frame.rows * renderer.cellHeight).toInt(), anyPressed,
-        ) { s.write(it) }
+        ) { s.writeFromCore(it) }
     }
 
     @SuppressLint("ClickableViewAccessibility")

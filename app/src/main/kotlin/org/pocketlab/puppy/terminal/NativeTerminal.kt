@@ -38,6 +38,8 @@ internal object NativeTerminal {
     @JvmStatic external fun frameCapacity(cols: Int, rows: Int): Int
     @JvmStatic external fun snapshot(handle: Long, buffer: ByteBuffer, force: Boolean): Int
     @JvmStatic external fun invalidate(handle: Long)
+    /** (cols shl 16) or rows, as the terminal currently is. */
+    @JvmStatic external fun gridSize(handle: Long): Int
     @JvmStatic external fun title(handle: Long): ByteArray?
     @JvmStatic external fun pwd(handle: Long): ByteArray?
     @JvmStatic external fun modes(handle: Long): Int

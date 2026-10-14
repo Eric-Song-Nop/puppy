@@ -51,6 +51,10 @@ interface KnownHostDao {
 
     @Delete
     suspend fun delete(knownHost: KnownHost)
+
+    /** For the SSH connect thread. */
+    @Delete
+    fun deleteBlocking(knownHost: KnownHost)
 }
 
 @Dao

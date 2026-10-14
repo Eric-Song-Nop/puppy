@@ -4,7 +4,7 @@ import org.pocketlab.puppy.data.KnownHost
 
 /** What to do with a host key the server presented. */
 sealed interface HostKeyDecision {
-    /** No confirmed key of this algorithm: ask the user to confirm the fingerprint. */
+    /** No confirmed key for this host at all: ask the user to confirm the fingerprint. */
     data object Unknown : HostKeyDecision
 
     /** Matches the confirmed key: continue silently. */
@@ -17,13 +17,15 @@ sealed interface HostKeyDecision {
 object HostKeys {
     /**
      * Compares a presented key (algorithm + base64 blob) with the confirmed
-     * entries for the same host and port. Keys are matched per algorithm,
-     * as OpenSSH does; SSHJ is told the known algorithms up front so the
-     * server negotiates one we can check.
+     * entries for the same host and port. SSHJ prefers the known algorithms,
+     * but that only orders negotiation: a server (or attacker) can still offer
+     * another type. So once any key is confirmed for host:port, a key of a
+     * different type is treated as changed, never as a first connection.
      */
     fun decide(known: List<KnownHost>, algorithm: String, publicKeyBase64: String): HostKeyDecision {
+        if (known.isEmpty()) return HostKeyDecision.Unknown
         val sameAlgorithm = known.filter { it.algorithm == algorithm }
-        if (sameAlgorithm.isEmpty()) return HostKeyDecision.Unknown
+        if (sameAlgorithm.isEmpty()) return HostKeyDecision.Mismatch(known.first())
         return if (sameAlgorithm.any { it.publicKey == publicKeyBase64 }) {
             HostKeyDecision.Match
         } else {

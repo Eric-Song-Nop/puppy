@@ -7,6 +7,10 @@ import android.system.Os
 import java.io.File
 import java.io.IOException
 import java.io.RandomAccessFile
+import java.nio.file.Files
+import java.nio.file.LinkOption
+import java.nio.file.Path
+import java.nio.file.Paths
 import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 import java.util.zip.ZipInputStream
@@ -99,21 +103,21 @@ class RuntimeManager(private val context: Context) {
                 // Same directory spelling as PREFIX: /data/data and /data/user/0 are
                 // different mounts, and rename() across them fails with EXDEV.
                 val staging = File(prefix.parentFile, "usr-staging")
-                staging.deleteRecursively()
+                staging.let(::deleteTree)
                 staging.mkdirs()
                 try {
                     extract(staging)
                     _state.value = State.Activating
                     val old = File(prefix.parentFile, "usr-old")
-                    old.deleteRecursively()
+                    old.let(::deleteTree)
                     if (prefix.exists() && !prefix.renameTo(old)) throw IOException("Could not replace the old runtime")
                     if (!staging.renameTo(prefix)) {
                         old.renameTo(prefix)
                         throw IOException("Could not activate the runtime")
                     }
-                    old.deleteRecursively()
+                    old.let(::deleteTree)
                 } catch (e: Throwable) {
-                    staging.deleteRecursively()
+                    staging.let(::deleteTree)
                     throw e
                 }
                 runSecondStage()
@@ -125,7 +129,6 @@ class RuntimeManager(private val context: Context) {
     }
 
     private fun extract(staging: File) {
-        val root = staging.canonicalPath + File.separator
         val links = ArrayList<Pair<String, String>>()
         var count = 0
         context.assets.open(assetZip).use { raw ->
@@ -143,7 +146,7 @@ class RuntimeManager(private val context: Context) {
                         continue
                     }
                     val target = File(staging, name)
-                    if (!target.canonicalPath.startsWith(root) && target.canonicalPath + File.separator != root) {
+                    if (!inside(target.toPath(), staging.toPath())) {
                         throw IOException("Unsafe path in runtime archive: $name")
                     }
                     if (entry.isDirectory) {
@@ -165,15 +168,17 @@ class RuntimeManager(private val context: Context) {
         }
         for ((linkTarget, linkPath) in links) {
             val link = File(staging, linkPath)
-            if (!link.canonicalFile.parentFile!!.canonicalPath.startsWith(staging.canonicalPath)) {
+            if (!inside(link.toPath(), staging.toPath())) {
                 throw IOException("Unsafe link in runtime archive: $linkPath")
             }
-            // Absolute targets must stay inside the final PREFIX; relative ones inside the tree.
-            val resolved = if (linkTarget.startsWith("/")) File(linkTarget)
-            else File(link.parentFile, linkTarget)
-            val prefixPath = env.prefix.canonicalPath
-            val ok = if (linkTarget.startsWith("/")) resolved.path.startsWith(prefixPath) || resolved.path.startsWith("/system/")
-            else resolved.canonicalPath.startsWith(staging.canonicalPath)
+            // Absolute targets must stay inside the final PREFIX (or /system);
+            // relative ones inside the extracted tree. Compared as normalized paths.
+            val ok = if (linkTarget.startsWith("/")) {
+                val t = Paths.get(linkTarget)
+                inside(t, env.prefix.toPath()) || inside(t, Paths.get("/system"))
+            } else {
+                inside(link.toPath().parent.resolve(linkTarget), staging.toPath())
+            }
             if (!ok) throw IOException("Unsafe link target in runtime archive: $linkPath")
             link.parentFile?.mkdirs()
             Os.symlink(linkTarget, link.path)
@@ -193,15 +198,8 @@ class RuntimeManager(private val context: Context) {
         val script = File(env.prefix, "etc").walkTopDown().maxDepth(6)
             .firstOrNull { it.name == "termux-bootstrap-second-stage.sh" } ?: return
         val bash = File(env.prefix, "bin/bash").takeIf { it.canExecute() } ?: File(env.prefix, "bin/sh")
-        val process = ProcessBuilder(bash.path, script.path)
-            .directory(env.filesDir)
-            .redirectErrorStream(true)
-            .apply { environment().putAll(runtimeEnv()) }
-            .start()
-        val out = process.inputStream.bufferedReader().readText()
-        if (!process.waitFor(5, TimeUnit.MINUTES) || process.exitValue() != 0) {
-            throw IOException("Runtime setup failed: ${out.takeLast(300)}")
-        }
+        val (code, out) = run(listOf(bash.path, script.path), TimeUnit.MINUTES.toMillis(5))
+        if (code != 0) throw IOException("Runtime setup failed: ${out.takeLast(300)}")
     }
 
     private fun runtimeEnv(): Map<String, String> = mapOf(
@@ -215,22 +213,45 @@ class RuntimeManager(private val context: Context) {
     /** Runs the activated shell once; files that need the final PREFIX only work after activation. */
     private fun smokeTest() {
         val sh = File(env.prefix, "bin/sh")
-        val process = ProcessBuilder(sh.path, "-c", "echo puppy-ok")
-            .directory(env.filesDir)
-            .redirectErrorStream(true)
-            .apply { environment().putAll(runtimeEnv()) }
-            .start()
-        val out = process.inputStream.bufferedReader().readText()
-        if (!process.waitFor(20, TimeUnit.SECONDS) || process.exitValue() != 0 || !out.contains("puppy-ok")) {
+        val (code, out) = run(listOf(sh.path, "-c", "echo puppy-ok"), 20_000)
+        if (code != 0 || !out.contains("puppy-ok")) {
             throw IOException("The runtime shell did not start: ${out.take(200)}")
+        }
+    }
+
+    /**
+     * Runs a runtime program with output going to a file, so a hung program
+     * can't block us on a pipe; it is killed at the timeout. Returns
+     * (exit code, or null on timeout) and its output.
+     */
+    private fun run(command: List<String>, timeoutMs: Long): Pair<Int?, String> {
+        val log = File.createTempFile("runtime", ".log", context.cacheDir)
+        try {
+            val process = ProcessBuilder(command)
+                .directory(env.filesDir)
+                .redirectErrorStream(true)
+                .redirectOutput(log)
+                .apply { environment().putAll(runtimeEnv()) }
+                .start()
+            if (!process.waitFor(timeoutMs, TimeUnit.MILLISECONDS)) {
+                process.destroyForcibly()
+                return null to log.readText()
+            }
+            return process.exitValue() to log.readText()
+        } finally {
+            log.delete()
         }
     }
 
     /** Removes the runtime but keeps HOME. Used by the explicit repair action. */
     suspend fun uninstall() = withContext(Dispatchers.IO) {
         mutex.withLock {
-            marker.delete()
-            env.prefix.deleteRecursively()
+            RandomAccessFile(File(env.filesDir, "runtime.lock"), "rw").channel.use { channel ->
+                channel.lock().use {
+                    marker.delete()
+                    deleteTree(env.prefix)
+                }
+            }
             refresh()
         }
     }
@@ -248,5 +269,25 @@ class RuntimeManager(private val context: Context) {
 
     companion object {
         private const val SPACE_FACTOR = 4
+
+        /** True if [child] is strictly below [parent], compared component-wise after normalizing. */
+        fun inside(child: Path, parent: Path): Boolean {
+            val c = child.toAbsolutePath().normalize()
+            val p = parent.toAbsolutePath().normalize()
+            return c != p && c.startsWith(p)
+        }
+
+        /**
+         * Deletes a tree without following symbolic links, so a link inside
+         * PREFIX pointing at HOME can never make a repair delete user files.
+         */
+        fun deleteTree(file: File) {
+            val path = file.toPath()
+            if (!Files.exists(path, LinkOption.NOFOLLOW_LINKS)) return
+            if (Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)) {
+                file.listFiles()?.forEach(::deleteTree)
+            }
+            Files.deleteIfExists(path)
+        }
     }
 }

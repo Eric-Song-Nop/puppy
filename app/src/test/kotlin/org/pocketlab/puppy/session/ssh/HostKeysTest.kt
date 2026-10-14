@@ -16,8 +16,10 @@ class HostKeysTest {
     }
 
     @Test
-    fun unknownWhenOnlyOtherAlgorithmsStored() {
-        assertEquals(HostKeyDecision.Unknown, HostKeys.decide(listOf(known("ssh-rsa", "R")), "ssh-ed25519", "E"))
+    fun otherAlgorithmForKnownHostIsAMismatch() {
+        // A known host suddenly offering another key type must get the "changed" warning.
+        val stored = known("ssh-rsa", "R")
+        assertEquals(HostKeyDecision.Mismatch(stored), HostKeys.decide(listOf(stored), "ssh-ed25519", "E"))
     }
 
     @Test

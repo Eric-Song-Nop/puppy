@@ -77,11 +77,18 @@ class PuppyApp : Application() {
         }
     }
 
-    fun reinstallRuntime() {
+    /**
+     * Rebuilds the runtime. Refused while a local shell runs, because PREFIX
+     * must never be replaced behind active processes (design §5.3).
+     */
+    fun reinstallRuntime(): Boolean {
+        val busy = sessions.sessions.value.any { it.spec is org.pocketlab.puppy.session.SessionSpec.Local && it.status.value.isLive }
+        if (busy) return false
         scope.launch {
             runtime.uninstall()
             runtime.install()
         }
+        return true
     }
 }
 

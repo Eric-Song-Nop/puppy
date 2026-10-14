@@ -331,6 +331,8 @@ private fun TerminalArea(app: PuppyApp, session: TerminalSession, settings: Sett
             // Other screens don't type into the terminal; don't leave its keyboard up.
             context.getSystemService(InputMethodManager::class.java)?.hideSoftInputFromWindow(view.windowToken, 0)
             view.clearSelection()
+            // Detach so the session stops producing frames nobody sees.
+            view.session = null
         }
     }
     LaunchedEffect(session.id, settings.bell) {

@@ -104,10 +104,16 @@ fun SettingsScreen(app: PuppyApp, settings: Settings, navigate: (Screen) -> Unit
                 RuntimeManager.State.Activating -> "Activating…" to null
             }
             SettingRow("Runtime", status, trailing = action?.let { label ->
-                { TextButton(onClick = { app.reinstallRuntime() }) { Text(label) } }
+                {
+                    TextButton(onClick = {
+                        if (!app.reinstallRuntime()) {
+                            android.widget.Toast.makeText(app, "Close local terminals first", android.widget.Toast.LENGTH_LONG).show()
+                        }
+                    }) { Text(label) }
+                }
             })
             Text(
-                "Reinstalling keeps your home directory. Close local sessions first.",
+                "Reinstalling keeps your home directory. It is only possible while no local terminal is running.",
                 color = chrome.muted,
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.padding(horizontal = 16.dp),

@@ -96,6 +96,9 @@ class TerminalCore(
         }
     }
 
+    /** Feeds bytes the app generates (not program output) without blocking the caller. */
+    fun inject(data: ByteArray) = post { feedNow(data, 0, data.size) }
+
     private fun feedNow(data: ByteArray, offset: Int, length: Int) {
         val events = NativeTerminal.feed(handle, data, offset, length)
         if (events and NativeTerminal.EVENT_REPLIES != 0) {
@@ -141,7 +144,9 @@ class TerminalCore(
         if (!visible && !force) return
         var n = NativeTerminal.snapshot(handle, buffer, force)
         if (n < 0) {
-            buffer = allocate(cols, rows)
+            // The program may have resized the grid itself (DECCOLM); size from native.
+            val grid = NativeTerminal.gridSize(handle)
+            buffer = allocate(maxOf(cols, grid ushr 16), maxOf(rows, grid and 0xFFFF))
             n = NativeTerminal.snapshot(handle, buffer, true)
         }
         forceNext = false

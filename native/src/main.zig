@@ -215,6 +215,13 @@ export fn Java_org_pocketlab_puppy_terminal_NativeTerminal_snapshot(
     return @intCast(n);
 }
 
+/// The terminal's current grid as (cols << 16) | rows. Programs can change it
+/// themselves (DECCOLM), so frame buffers are sized from this.
+export fn Java_org_pocketlab_puppy_terminal_NativeTerminal_gridSize(_: Env, _: c.jclass, h: c.jlong) c.jint {
+    const s = session(h) orelse return 0;
+    return @bitCast((@as(u32, s.terminal.cols) << 16) | @as(u32, s.terminal.rows));
+}
+
 export fn Java_org_pocketlab_puppy_terminal_NativeTerminal_invalidate(_: Env, _: c.jclass, h: c.jlong) void {
     if (session(h)) |s| s.invalidate();
 }

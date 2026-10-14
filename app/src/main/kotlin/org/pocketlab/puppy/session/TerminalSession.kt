@@ -123,7 +123,7 @@ class TerminalSession(
     /** Starts a new backend in place of one that exited or failed, keeping the screen. */
     fun restart() {
         backend?.close()
-        if (started) core.feed("\r\n".toByteArray())
+        if (started) core.inject("\r\n".toByteArray())
         start()
     }
 
@@ -142,8 +142,18 @@ class TerminalSession(
         _title.value = _customTitle.value ?: remoteTitle ?: defaultTitle
     }
 
-    /** Sends user input. Any user input returns the viewport to the bottom. */
+    /**
+     * Sends raw user input. All input (text, encoded keys, mouse, paste) goes
+     * through the core thread so it reaches the backend in the order typed;
+     * encoders already run there and call [writeFromCore] directly.
+     */
     fun write(data: ByteArray) {
+        if (data.isEmpty()) return
+        core.post { writeFromCore(data) }
+    }
+
+    /** Writes input; must be called on the core thread. Returns the viewport to the bottom. */
+    fun writeFromCore(data: ByteArray) {
         if (data.isEmpty()) return
         core.scrollToBottom()
         backend?.write(data)
@@ -152,7 +162,7 @@ class TerminalSession(
     fun sendText(text: String) = write(text.toByteArray())
 
     fun paste(text: String) {
-        core.encodePaste(text) { write(it) }
+        core.encodePaste(text) { writeFromCore(it) }
     }
 
     fun resize(size: TerminalSize, cellWidth: Int, cellHeight: Int) {
@@ -170,7 +180,8 @@ class TerminalSession(
         this.cellWidth = cellWidth
         this.cellHeight = cellHeight
         core.resize(size.cols, size.rows, cellWidth, cellHeight)
-        backend?.resize(size)
+        // On the core thread, in order with input, and never blocking the UI.
+        core.post { backend?.resize(size) }
     }
 
     /** Ends the backend (process group or connection) and frees native state. */
