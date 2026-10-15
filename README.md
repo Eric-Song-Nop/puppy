@@ -50,11 +50,14 @@ mise install                          # Zig 0.16.0
 
 已在 Android 16（16 KB 页，arm64 模拟器）与 vivo X Fold2 验证：本地 Shell、Ghostty 解析与绘制、IME 输入（含 Unexpected Keyboard 与 Kitty 键盘协议）、Kitty 图像协议、Nerd Font 图标、主题切换与预览、SSH（密钥/密码认证、主机指纹确认、PTY、窗口变化）。
 
-本地运行环境：`runtime/remote-build.sh <x86_64 Linux 主机>` 以本应用 PREFIX 从源码构建最小 Termux bootstrap（bash 5.3、coreutils、grep/sed/gawk、tar/gzip、less、nano、procps 等），复制到 `app/src/main/assets/runtime/`（不入库，约 25 MB）后随 APK 打包，首启自动离线安装。
+本地运行环境默认直接使用 Termux 官方 bootstrap 与软件源：`runtime/fetch-termux-bootstrap.sh` 下载固定版本并校验，放到 `app/src/main/assets/runtime/`（不入库）后随 APK 打包，首启离线安装。官方包写死了 `/data/data/com.termux`，由 `libpuppy_remap.so`（`native/src/remap.zig`）以 `LD_PRELOAD` 在 libc 层把该前缀改写为本应用目录：路径类调用、`syscall()`、`#!` 脚本解释器、相对路径跨入前缀、子进程环境被清理（如 termux-exec 的 `unset LD_PRELOAD`）均已覆盖；符号链接目标在解压时改写。已在模拟器验证 `pkg install openssh yazi 7zip chafa fd ffmpeg fzf imagemagick jq poppler ripgrep zoxide file` 安装与运行，yazi 本地图片预览（Kitty unicode placeholder）与 herdr（官方静态二进制）可用。
+
+另有 `runtime/remote-build.sh <x86_64 Linux 主机>`，以本应用 PREFIX 从源码构建最小 bootstrap（不含 apt），作为不依赖改写的备选。
 
 尚未完成：
 
 - 未打包 bootstrap 的构建中，本地终端退回 `/system/bin/sh`。
-- 自有签名软件源与域名未确定（设计 §15 第 1 项），bootstrap 暂不含 apt，无法安装额外软件包。
+- 改写层不覆盖：静态链接程序自身的路径、`posix_spawn` 内部的 exec、动态链接器的 RUNPATH（以 `LD_LIBRARY_PATH` 代替）；部分官方库未按 16 KB 页对齐（Termux 上游问题），16 KB 页设备上可能无法加载。
+- 自有签名软件源与域名未确定（设计 §15 第 1 项），目前直接使用 Termux 官方源。
 - 真机门槛（中文 IME、外接键盘、TalkBack、厂商后台行为）未验证。
 - 主题快照的许可证需在发布前与上游再次核对。
