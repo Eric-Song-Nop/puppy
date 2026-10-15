@@ -18,6 +18,48 @@ pub fn map(path: [:0]const u8, from: []const u8, to: []const u8, buf: []u8) [:0]
     return buf[0..n :0];
 }
 
+/// True if a relative `path` could resolve into `from` from some base
+/// directory: it names `from`'s last component or climbs with `..`.
+/// Lets the common case (ordinary relative paths) skip any work.
+pub fn mayCross(path: []const u8, from: []const u8) bool {
+    const last = std.fs.path.basenamePosix(from);
+    if (last.len == 0) return false;
+    var it = std.mem.splitScalar(u8, path, '/');
+    while (it.next()) |c| {
+        if (std.mem.eql(u8, c, "..") or std.mem.eql(u8, c, last)) return true;
+    }
+    return false;
+}
+
+/// Joins `base` (absolute) and a relative `path` into `out`, resolving `.`
+/// and `..` lexically. Returns null if the result does not fit.
+pub fn join(base: []const u8, path: []const u8, out: []u8) ?[:0]const u8 {
+    var len: usize = 0;
+    var parts = [2][]const u8{ base, path };
+    for (&parts) |part| {
+        var it = std.mem.splitScalar(u8, part, '/');
+        while (it.next()) |c| {
+            if (c.len == 0 or std.mem.eql(u8, c, ".")) continue;
+            if (std.mem.eql(u8, c, "..")) {
+                while (len > 0 and out[len - 1] != '/') len -= 1;
+                if (len > 0) len -= 1;
+                continue;
+            }
+            if (len + 1 + c.len + 1 > out.len) return null;
+            out[len] = '/';
+            @memcpy(out[len + 1 ..][0..c.len], c);
+            len += 1 + c.len;
+        }
+    }
+    if (len == 0) {
+        if (out.len < 2) return null;
+        out[0] = '/';
+        len = 1;
+    }
+    out[len] = 0;
+    return out[0..len :0];
+}
+
 pub const Shebang = struct {
     interpreter: []const u8,
     /// The single optional argument after the interpreter, as the kernel passes it.
@@ -62,4 +104,21 @@ test "parseShebang follows kernel rules" {
     try std.testing.expectEqualStrings("python3 -u", b.arg.?);
     try std.testing.expect(parseShebang("\x7fELF") == null);
     try std.testing.expect(parseShebang("#!\n") == null);
+}
+
+test "relative paths that may cross into the mapped prefix" {
+    const from = "/data/data/com.termux";
+    try std.testing.expect(mayCross("com.termux", from));
+    try std.testing.expect(mayCross("com.termux/files/usr", from));
+    try std.testing.expect(mayCross("../com.termux", from));
+    try std.testing.expect(!mayCross("files/usr/bin", from));
+    try std.testing.expect(!mayCross("com.termuxx", from));
+}
+
+test "join resolves dot segments" {
+    var buf: [256]u8 = undefined;
+    try std.testing.expectEqualStrings("/data/data/com.termux", join("/data/data", "com.termux", &buf).?);
+    try std.testing.expectEqualStrings("/data/data/com.termux/files", join("/data/data/x", "../com.termux/./files/", &buf).?);
+    try std.testing.expectEqualStrings("/", join("/", "..", &buf).?);
+    try std.testing.expectEqualStrings("/a", join("/", "a", &buf).?);
 }
