@@ -52,6 +52,9 @@ android {
     }
 
     packaging {
+        // libpuppy_remap.so is loaded by shells via LD_PRELOAD from
+        // nativeLibraryDir, so native libraries must be extracted.
+        jniLibs.useLegacyPackaging = true
         resources.excludes += listOf("META-INF/{AL2.0,LGPL2.1}", "META-INF/versions/9/OSGI-INF/MANIFEST.MF", "META-INF/LICENSE.md", "META-INF/NOTICE.md")
     }
 

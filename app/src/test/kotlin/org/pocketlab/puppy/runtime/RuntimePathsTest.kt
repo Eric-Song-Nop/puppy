@@ -2,6 +2,7 @@ package org.pocketlab.puppy.runtime
 
 import java.nio.file.Files
 import java.nio.file.Paths
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -29,5 +30,14 @@ class RuntimePathsTest {
         // .. is normalized away.
         assertFalse(RuntimeManager.inside(Paths.get("/data/data/p/files/usr/../home/x"), Paths.get("/data/data/p/files/usr")))
         assertFalse(RuntimeManager.inside(staging.resolve("../../etc"), staging))
+    }
+
+    @Test fun symlinkTargetsUnderTheRemappedPackageMove() {
+        val from = "/data/data/com.termux"
+        val to = "/data/data/org.pocketlab.puppy"
+        assertEquals("$to/files/usr/bin/bzless", RuntimeManager.remapLinkTarget("$from/files/usr/bin/bzless", from, to))
+        assertEquals("./bin/ls", RuntimeManager.remapLinkTarget("./bin/ls", from, to))
+        assertEquals("/data/data/com.termux.api/x", RuntimeManager.remapLinkTarget("/data/data/com.termux.api/x", from, to))
+        assertEquals("$from/files/x", RuntimeManager.remapLinkTarget("$from/files/x", null, to))
     }
 }

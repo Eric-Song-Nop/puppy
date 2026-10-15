@@ -73,6 +73,7 @@ class RuntimeManager(private val context: Context) {
             refresh()
             if (_state.value is State.Ready || _state.value is State.Unavailable) return@withLock _state.value
             val result = runCatching { installLocked() }
+            result.exceptionOrNull()?.let { android.util.Log.w(TAG, "runtime install failed", it) }
             _state.value = result.getOrElse { State.Failed(it.message ?: it.javaClass.simpleName) }
             _state.value
         }
@@ -83,10 +84,16 @@ class RuntimeManager(private val context: Context) {
         val manifest = manifest() ?: return State.Unavailable
         val prefix = env.prefix
         val expectedPrefix = manifest.getString("prefix")
-        // Secondary users and app clones get a different data dir (design §4.2).
-        if (prefix.path != expectedPrefix || !LocalEnvironment.sameFile(File(expectedPrefix).parentFile!!, env.filesDir)) {
+        // Official Termux bootstraps are built for com.termux and run through
+        // libpuppy_remap.so; our own builds must match this app's data dir.
+        val remapFrom = manifest.optString("remapFrom").ifEmpty { null }
+        if (remapFrom != null) {
+            if (expectedPrefix != "$remapFrom/files/usr") throw IOException("Runtime manifest is inconsistent")
+        } else if (prefix.path != expectedPrefix || !LocalEnvironment.sameFile(File(expectedPrefix).parentFile!!, env.filesDir)) {
+            // Secondary users and app clones get a different data dir (design §4.2).
             throw IOException("Runtime was built for $expectedPrefix but this app's data is in ${env.filesDir.path}")
         }
+        if (remapFrom != null) env.remapMarker.writeText(remapFrom) else env.remapMarker.delete()
         val expectedSha = manifest.getString("sha256").lowercase()
         val revision = manifest.optString("revision", "unknown")
 
@@ -106,7 +113,7 @@ class RuntimeManager(private val context: Context) {
                 staging.let(::deleteTree)
                 staging.mkdirs()
                 try {
-                    extract(staging)
+                    extract(staging, remapFrom)
                     _state.value = State.Activating
                     val old = File(prefix.parentFile, "usr-old")
                     old.let(::deleteTree)
@@ -128,7 +135,7 @@ class RuntimeManager(private val context: Context) {
         return State.Ready(revision)
     }
 
-    private fun extract(staging: File) {
+    private fun extract(staging: File, remapFrom: String?) {
         val links = ArrayList<Pair<String, String>>()
         var count = 0
         context.assets.open(assetZip).use { raw ->
@@ -166,7 +173,9 @@ class RuntimeManager(private val context: Context) {
                 }
             }
         }
-        for ((linkTarget, linkPath) in links) {
+        for ((rawTarget, linkPath) in links) {
+            // The kernel resolves symlinks, so the remap library can't fix them.
+            val linkTarget = remapLinkTarget(rawTarget, remapFrom, env.remapTo)
             val link = File(staging, linkPath)
             if (!inside(link.toPath(), staging.toPath())) {
                 throw IOException("Unsafe link in runtime archive: $linkPath")
@@ -208,7 +217,7 @@ class RuntimeManager(private val context: Context) {
         "HOME" to env.home.path,
         "TMPDIR" to File(env.prefix, "tmp").path,
         "LANG" to "en_US.UTF-8",
-    )
+    ) + env.remapEnv()
 
     /** Runs the activated shell once; files that need the final PREFIX only work after activation. */
     private fun smokeTest() {
@@ -268,7 +277,12 @@ class RuntimeManager(private val context: Context) {
     }
 
     companion object {
+        private const val TAG = "PuppyRuntime"
         private const val SPACE_FACTOR = 4
+
+        /** Rewrites an absolute symlink target under [from] to the same path under [to]. */
+        fun remapLinkTarget(target: String, from: String?, to: String): String =
+            if (from != null && (target == from || target.startsWith("$from/"))) to + target.substring(from.length) else target
 
         /** True if [child] is strictly below [parent], compared component-wise after normalizing. */
         fun inside(child: Path, parent: Path): Boolean {

@@ -50,6 +50,7 @@ class LocalEnvironment(private val context: Context) {
             env["TMPDIR"] = tmp.absolutePath
             env["SHELL"] = shellPath()
             env["PUPPY_VERSION"] = org.pocketlab.puppy.BuildConfig.VERSION_NAME
+            env.putAll(remapEnv())
             LocalCommand(shellPath(), listOf("-l"), env, dir)
         } else {
             env["PATH"] = "/system/bin:/system/xbin"
@@ -57,6 +58,30 @@ class LocalEnvironment(private val context: Context) {
             env["SHELL"] = SYSTEM_SHELL
             LocalCommand(SYSTEM_SHELL, listOf("-l"), env, dir)
         }
+    }
+
+    /** Set when the installed runtime was built for another package (official Termux). */
+    val remapMarker = File(filesDir, "runtime.remap")
+
+    /** The path prefix the runtime's binaries have compiled in, or null if built for us. */
+    fun remapFrom(): String? = remapMarker.takeIf { it.exists() }?.readText()?.trim()?.ifEmpty { null }
+
+    /** Puppy's own data dir spelled like [prefix]: `/data/data/<applicationId>`. */
+    val remapTo: String get() = prefix.parentFile!!.parentFile!!.path
+
+    /**
+     * Environment for running runtime programs: loads libpuppy_remap.so so
+     * paths compiled for another package resolve inside Puppy, and points
+     * the dynamic linker at PREFIX/lib (it reads RUNPATH itself, outside libc).
+     */
+    fun remapEnv(): Map<String, String> {
+        val from = remapFrom() ?: return emptyMap()
+        return mapOf(
+            "LD_PRELOAD" to File(context.applicationInfo.nativeLibraryDir, "libpuppy_remap.so").path,
+            "LD_LIBRARY_PATH" to File(prefix, "lib").path,
+            "PUPPY_REMAP_FROM" to from,
+            "PUPPY_REMAP_TO" to remapTo,
+        )
     }
 
     private fun shellPath(): String {
