@@ -166,7 +166,9 @@ class TerminalRenderer(
             val fg = (cellColors(frame, i) ushr 32).toInt()
             drawDecorations(canvas, frame, i, x, top, fg)
             val w = frame.wide(i)
-            if (frame.codepoints[i] == 0 || attrs and ATTR_INVISIBLE != 0 || w == WIDE_SPACER_TAIL || w == WIDE_SPACER_HEAD) {
+            val skip = frame.codepoints[i] == 0 || frame.codepoints[i] == KITTY_PLACEHOLDER ||
+                attrs and ATTR_INVISIBLE != 0 || w == WIDE_SPACER_TAIL || w == WIDE_SPACER_HEAD
+            if (skip) {
                 x++
                 continue
             }
@@ -304,6 +306,9 @@ class TerminalRenderer(
 
     companion object {
         const val LINE_SPACING = 1.15f
+
+        /** Kitty graphics unicode placeholder: the image is drawn there instead. */
+        const val KITTY_PLACEHOLDER = 0x10EEEE
 
         /**
          * Codepoints Nerd Fonts v3 assigns to icons: the BMP private use area

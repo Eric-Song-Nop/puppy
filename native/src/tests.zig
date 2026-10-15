@@ -180,6 +180,25 @@ test "kitty graphics: PNG transmit and place produces a placement" {
     try testing.expectEqual(@as(u8, 0x00), px.data[1]);
 }
 
+test "kitty graphics: unicode placeholder placements are exported" {
+    const graphics = @import("graphics.zig");
+    const s = try Session.create(testing.allocator, .{ .cols = 20, .rows = 5 });
+    defer s.destroy();
+    try s.resize(20, 5, 10, 20);
+    const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==";
+    // Virtual placement (U=1) two cells wide, then the placeholder cells in
+    // the image's id colour: row 0 / col 0 diacritics, then an inherited cell.
+    _ = s.feed("\x1b_Ga=T,U=1,f=100,i=7,c=2,r=1,q=2;" ++ png ++ "\x1b\\");
+    _ = s.feed("\x1b[2;3H\x1b[38;5;7m\u{10EEEE}\u{0305}\u{0305}\u{10EEEE}\x1b[m");
+    var out: [4 * graphics.placement_words]i32 = undefined;
+    const n = graphics.placements(s.terminal, &out);
+    try testing.expectEqual(@as(usize, 1), n);
+    try testing.expectEqual(@as(i32, 7), out[graphics.P.image_id]);
+    try testing.expectEqual(@as(i32, 2), out[graphics.P.col]);
+    try testing.expectEqual(@as(i32, 1), out[graphics.P.row]);
+    try testing.expect(out[graphics.P.width] > 0);
+}
+
 test "kitty graphics: support query is answered" {
     const s = try Session.create(testing.allocator, .{ .cols = 20, .rows = 5 });
     defer s.destroy();

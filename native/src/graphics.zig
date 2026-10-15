@@ -64,23 +64,22 @@ pub fn placements(t: *Terminal, out: []i32) usize {
         const pos = viewportPos(p, &image, t) orelse continue;
         const size = p.pixelSize(image, t);
         const src = p.sourceRect(image);
-        const o = out[n * placement_words ..][0..placement_words];
-        o[P.image_id] = @bitCast(image.id);
-        o[P.generation_lo] = @bitCast(@as(u32, @truncate(image.generation)));
-        o[P.generation_hi] = @bitCast(@as(u32, @truncate(image.generation >> 32)));
-        o[P.col] = pos.col;
-        o[P.row] = pos.row;
-        o[P.x_offset] = @intCast(@min(p.x_offset, std.math.maxInt(i32)));
-        o[P.y_offset] = @intCast(@min(p.y_offset, std.math.maxInt(i32)));
-        o[P.width] = @intCast(@min(size.width, std.math.maxInt(i32)));
-        o[P.height] = @intCast(@min(size.height, std.math.maxInt(i32)));
-        o[P.source_x] = @intCast(@min(src.x, std.math.maxInt(i32)));
-        o[P.source_y] = @intCast(@min(src.y, std.math.maxInt(i32)));
-        o[P.source_width] = @intCast(@min(src.width, std.math.maxInt(i32)));
-        o[P.source_height] = @intCast(@min(src.height, std.math.maxInt(i32)));
-        o[P.z] = p.z;
+        emit(out[n * placement_words ..][0..placement_words], &image, .{
+            .col = pos.col,
+            .row = pos.row,
+            .x_offset = p.x_offset,
+            .y_offset = p.y_offset,
+            .width = size.width,
+            .height = size.height,
+            .source_x = src.x,
+            .source_y = src.y,
+            .source_width = src.width,
+            .source_height = src.height,
+            .z = p.z,
+        });
         n += 1;
     }
+    n += virtualPlacements(t, out[n * placement_words ..]);
     // Draw order: lower z first (insertion sort; there are few placements).
     var i: usize = 1;
     while (i < n) : (i += 1) {
@@ -93,6 +92,82 @@ pub fn placements(t: *Terminal, out: []i32) usize {
             @memcpy(a, b);
             @memcpy(b, &tmp);
         }
+    }
+    return n;
+}
+
+const Geometry = struct {
+    col: i32,
+    row: i32,
+    x_offset: u32,
+    y_offset: u32,
+    width: u32,
+    height: u32,
+    source_x: u32,
+    source_y: u32,
+    source_width: u32,
+    source_height: u32,
+    z: i32,
+};
+
+fn clamp(v: u32) i32 {
+    return @intCast(@min(v, std.math.maxInt(i32)));
+}
+
+fn emit(o: *[placement_words]i32, image: anytype, g: Geometry) void {
+    o[P.image_id] = @bitCast(image.id);
+    o[P.generation_lo] = @bitCast(@as(u32, @truncate(image.generation)));
+    o[P.generation_hi] = @bitCast(@as(u32, @truncate(image.generation >> 32)));
+    o[P.col] = g.col;
+    o[P.row] = g.row;
+    o[P.x_offset] = clamp(g.x_offset);
+    o[P.y_offset] = clamp(g.y_offset);
+    o[P.width] = clamp(g.width);
+    o[P.height] = clamp(g.height);
+    o[P.source_x] = clamp(g.source_x);
+    o[P.source_y] = clamp(g.source_y);
+    o[P.source_width] = clamp(g.source_width);
+    o[P.source_height] = clamp(g.source_height);
+    o[P.z] = g.z;
+}
+
+/// Placements drawn through U+10EEEE placeholder cells (what yazi and other
+/// programs use under kitty and Ghostty), one per run of placeholder cells
+/// on screen, as Ghostty's renderer does.
+fn virtualPlacements(t: *Terminal, out: []i32) usize {
+    if (t.cols == 0 or t.rows == 0) return 0;
+    const cell_w = t.width_px / t.cols;
+    const cell_h = t.height_px / t.rows;
+    if (cell_w == 0 or cell_h == 0) return 0;
+    const storage = &t.screens.active.kitty_images;
+    const pages = &t.screens.active.pages;
+    const max = out.len / placement_words;
+    var n: usize = 0;
+    var it = vt.kitty.graphics.unicode.placementIterator(
+        pages.getTopLeft(.viewport),
+        pages.getBottomRight(.viewport),
+    );
+    while (it.next()) |vp| {
+        if (n >= max) break;
+        const image = storage.imageById(vp.image_id) orelse continue;
+        if (image.data != .complete) continue;
+        const r = vp.renderPlacement(storage, &image, cell_w, cell_h) catch continue;
+        if (r.dest_width == 0 or r.dest_height == 0) continue;
+        const at = pages.pointFromPin(.viewport, r.top_left) orelse continue;
+        emit(out[n * placement_words ..][0..placement_words], &image, .{
+            .col = @intCast(at.viewport.x),
+            .row = @intCast(at.viewport.y),
+            .x_offset = r.offset_x,
+            .y_offset = r.offset_y,
+            .width = r.dest_width,
+            .height = r.dest_height,
+            .source_x = r.source_x,
+            .source_y = r.source_y,
+            .source_width = r.source_width,
+            .source_height = r.source_height,
+            .z = -1,
+        });
+        n += 1;
     }
     return n;
 }
