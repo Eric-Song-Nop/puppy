@@ -231,3 +231,7 @@ test "herdr's kitty flags (1|2|4): text key press is text, release is CSI u" {
     try s.encodeKey(&aw.writer, "key_q", "q", 0, 0, 0, 'q');
     try testing.expectEqualStrings("\x1b[113;1:3u", aw.written());
 }
+
+test {
+    _ = @import("remap_path.zig");
+}

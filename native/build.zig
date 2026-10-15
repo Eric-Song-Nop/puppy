@@ -45,6 +45,25 @@ pub fn build(b: *std.Build) !void {
     }
     b.installArtifact(lib);
 
+    // LD_PRELOAD library letting unmodified Termux packages run (remap.zig).
+    if (target.result.abi.isAndroid()) {
+        const remap = b.addLibrary(.{
+            .name = "puppy_remap",
+            .linkage = .dynamic,
+            .root_module = b.createModule(.{
+                .root_source_file = b.path("src/remap.zig"),
+                .target = target,
+                .optimize = optimize,
+                .link_libc = true,
+                .strip = optimize != .Debug,
+            }),
+        });
+        remap.root_module.addCSourceFile(.{ .file = b.path("src/remap_exec.c") });
+        remap.link_z_max_page_size = 16384;
+        try android_ndk.addPaths(b, remap);
+        b.installArtifact(remap);
+    }
+
     // Host tests cover the platform-independent parts (frame encoding,
     // input encoding) against the real Ghostty core.
     const test_mod = b.createModule(.{
